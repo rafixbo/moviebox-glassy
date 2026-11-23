@@ -253,6 +253,13 @@ class StreamSource {
   final String? uploader;
   final String? resourceId;
 
+  /// Session cookie the CDN requires for this stream (the `signCookie`
+  /// from play-info, e.g. `Edge-Cache-Cookie=...`). The DASH manifest
+  /// AND every .m4s segment return 403 without it — it is the key that
+  /// unlocks in-app playback. Null for plain direct files (resource
+  /// mp4s carry their own `?sign=` query instead).
+  final String? cookie;
+
   const StreamSource({
     required this.url,
     required this.label,
@@ -260,6 +267,7 @@ class StreamSource {
     this.sizeBytes,
     this.uploader,
     this.resourceId,
+    this.cookie,
   });
 
   String get sizeLabel {
@@ -381,6 +389,23 @@ List<Subject> parseSearchResults(Map<String, dynamic> root) {
 
 /// Parse stream sources from play-info + resource list + detectors.
 /// Mirrors the Rust `episode_streams` logic (minus the TUI bits).
+/// Clean a raw `signCookie` value into a single `Cookie` header value:
+/// trim, drop empty parts, join with "; " (mirrors the upstream
+/// MovieBox-Tui adapter). Returns null when there is no cookie.
+String? cleanSignCookie(dynamic raw) {
+  final s = raw?.toString().trim() ?? '';
+  if (s.isEmpty) return null;
+  final parts = s
+      .trim()
+      .replaceAll(RegExp(r';+$'), '')
+      .split(';')
+      .map((p) => p.trim())
+      .where((p) => p.isNotEmpty)
+      .toList();
+  if (parts.isEmpty) return null;
+  return parts.join('; ');
+}
+
 List<StreamSource> parseStreamSources({
   required Map<String, dynamic>? playInfo,
   required Map<String, dynamic>? resource,
@@ -393,7 +418,8 @@ List<StreamSource> parseStreamSources({
   final out = <StreamSource>[];
   final seen = <String>{};
 
-  void add(String? url, int res, int? size, String? up, String? rid) {
+  void add(String? url, int res, int? size, String? up, String? rid,
+      [String? cookie]) {
     if (url == null || url.isEmpty || url == placeholder) return;
     final base = url.split('?').first;
     if (!seen.add(base)) return;
@@ -405,6 +431,7 @@ List<StreamSource> parseStreamSources({
         sizeBytes: size,
         uploader: up,
         resourceId: rid,
+        cookie: cookie,
       ),
     );
   }
@@ -431,6 +458,9 @@ List<StreamSource> parseStreamSources({
           sizeOf(s['size']),
           null,
           null,
+          // The CDN session cookie — without it the DASH manifest and
+          // every segment return 403. This was the playback failure.
+          cleanSignCookie(s['signCookie']),
         );
       }
     }
@@ -452,6 +482,7 @@ List<StreamSource> parseStreamSources({
         sizeOf(item['size']),
         item['uploadBy']?.toString(),
         _id(item['resourceId'] ?? item['id']),
+        cleanSignCookie(item['signCookie']),
       );
     }
   }
@@ -467,6 +498,7 @@ List<StreamSource> parseStreamSources({
             sizeOf(r['firstSize'] ?? r['size']),
             d['uploadBy']?.toString(),
             _id(d['resourceId']),
+            cleanSignCookie(r['signCookie'] ?? d['signCookie']),
           );
         }
       }
@@ -478,6 +510,7 @@ List<StreamSource> parseStreamSources({
       sizeOf(d['firstSize']),
       d['uploadBy']?.toString(),
       _id(d['resourceId']),
+      cleanSignCookie(d['signCookie']),
     );
   }
 

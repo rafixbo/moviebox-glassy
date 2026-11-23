@@ -17,6 +17,28 @@ import 'models.dart';
 /// third-party client for personal use.
 
 const String kPlayerReferer = 'https://sportslive.wine';
+
+/// HTTP headers the player must send for a stream, mirroring the
+/// upstream MovieBox-Tui adapter (`src/providers/moviebox/adapt.rs`):
+/// `Referer` + `User-Agent`, PLUS the session `Cookie` when the source
+/// carries one. The cookie is the decisive header for DASH (.mpd)
+/// streams: the CDN returns 403 on the manifest and on every .m4s
+/// segment without it (verified live 2026-11-23). media_kit/mpv
+/// applies these headers to the manifest request and to all segment
+/// requests, which is exactly the upstream mpv `--http-header-fields`
+/// semantics. Direct mp4 resource links carry their own `?sign=`
+/// query and work with or without the cookie.
+Map<String, String> streamHeaders(StreamSource source) {
+  final headers = <String, String>{
+    'User-Agent': kUserAgent,
+    'Referer': kPlayerReferer,
+  };
+  final cookie = source.cookie;
+  if (cookie != null && cookie.isNotEmpty) {
+    headers['Cookie'] = cookie;
+  }
+  return headers;
+}
 const String kUserAgent =
     'com.community.oneroom/50020120 (Linux; U; Android 13; en_US; 23078RKD5C; Build/TQ2A.230405.003; Cronet/135.0.7012.3)';
 
@@ -560,6 +582,7 @@ class MovieBoxApi {
                       : int.tryParse('${p['size']}'),
                   uploader: p['uploadBy']?.toString(),
                   resourceId: rid,
+                  cookie: cleanSignCookie(p['signCookie']),
                 ),
               );
             }

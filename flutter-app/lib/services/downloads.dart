@@ -8,14 +8,17 @@ import '../api/moviebox_api.dart';
 
 /// Offline downloads. Files land in the platform Downloads folder
 /// (Android: app documents / Downloads; Windows: user Downloads).
-/// Same UA + Referer headers as playback. Pause/resume uses HTTP Range
-/// when the server supports it; otherwise the download restarts.
+/// Same UA + Referer headers as playback, plus the session Cookie
+/// when the source carries one (DASH downloads 403 without it).
+/// Pause/resume uses HTTP Range when the server supports it;
+/// otherwise the download restarts.
 class DownloadItem {
   final String id; // subjectId|season|episode
   final String title;
   final String label; // e.g. "S1 E2 · 720p"
   final String filePath;
   final String url; // source URL (needed for pause/resume)
+  final String? cookie; // CDN session cookie, when the source has one
   final int totalBytes;
   final int downloadedBytes;
   final DownloadStatus status;
@@ -26,6 +29,7 @@ class DownloadItem {
     required this.label,
     required this.filePath,
     this.url = '',
+    this.cookie,
     this.totalBytes = 0,
     this.downloadedBytes = 0,
     this.status = DownloadStatus.downloading,
@@ -43,6 +47,7 @@ class DownloadItem {
     label: label,
     filePath: filePath,
     url: url,
+    cookie: cookie,
     totalBytes: totalBytes ?? this.totalBytes,
     downloadedBytes: downloadedBytes ?? this.downloadedBytes,
     status: status ?? this.status,
@@ -90,6 +95,7 @@ class DownloadManager {
     required String title,
     required String url,
     required String qualityLabel,
+    String? cookie,
   }) async {
     final id = '$subjectId|$season|$episode';
     final dir = await _downloadDir;
@@ -104,6 +110,7 @@ class DownloadManager {
           '${season > 0 || episode > 0 ? 'S$season E$episode · ' : ''}$qualityLabel',
       filePath: path,
       url: url,
+      cookie: cookie,
     );
     _items[id] = item;
     _emit();
@@ -120,6 +127,8 @@ class DownloadManager {
       final headers = <String, dynamic>{
         'User-Agent': kUserAgent,
         'Referer': kPlayerReferer,
+        if (item.cookie != null && item.cookie!.isNotEmpty)
+          'Cookie': item.cookie!,
         if (downloaded > 0) 'Range': 'bytes=$downloaded-',
       };
       await _dio.download(

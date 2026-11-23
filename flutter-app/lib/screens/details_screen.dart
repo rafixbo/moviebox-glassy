@@ -280,6 +280,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                                   title: _subject.title,
                                   url: s.url,
                                   qualityLabel: s.label,
+                                  cookie: s.cookie,
                                 );
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -330,6 +331,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
           sources: sources,
           initialSource: source,
           startAt: startAt,
+          detectors: _details?.detectors ?? const [],
         ),
       ),
     );

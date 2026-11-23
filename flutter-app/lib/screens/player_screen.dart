@@ -13,9 +13,15 @@ import '../theme.dart';
 
 /// Material in-app player (media_kit — Android + Windows).
 ///
-/// Honest note: some MovieBox resource links are *resolver* links
-/// (e.g. ugc-video.com) rather than direct media files; those may fail
-/// in-app. When playback errors, the screen offers "Open externally".
+/// Streams carry the CDN session cookie from the API (`signCookie`):
+/// without it the DASH manifest and segments return 403. The player
+/// sends it via media_kit `httpHeaders` (mirroring upstream
+/// MovieBox-Tui's mpv `--http-header-fields`), and on failure it
+/// auto-recovers — one fresh source refresh, then the next source —
+/// before ever showing the error card. Some resource links are still
+/// *resolver* links (e.g. ugc-video.com) rather than direct media
+/// files; those may fail in-app even with the cookie, and the error
+/// screen offers "Open externally" for them.
 class PlayerScreen extends StatefulWidget {
   final Subject subject;
   final int season;
@@ -24,6 +30,10 @@ class PlayerScreen extends StatefulWidget {
   final StreamSource initialSource;
   final Duration startAt;
   final String? offlineFilePath;
+
+  /// Detector payloads for the details screen, so a recovery refresh
+  /// can re-fetch the same source list (with fresh session cookies).
+  final List<Map<String, dynamic>> detectors;
 
   const PlayerScreen({
     super.key,
@@ -34,6 +44,7 @@ class PlayerScreen extends StatefulWidget {
     required this.initialSource,
     this.startAt = Duration.zero,
     this.offlineFilePath,
+    this.detectors = const [],
   });
 
   @override
@@ -68,10 +79,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   bool get _isOffline => widget.offlineFilePath != null;
 
+  // ---- Auto-recovery state ----
+  // On a playback error the player does NOT show the error card right
+  // away. It first re-fetches fresh sources once (a new session cookie
+  // — cookies are time-limited), then falls back to the next untried
+  // source, up to [_maxAutoTries] attempts in total. Only when every
+  // attempt is exhausted does the friendly error card appear.
+  static const int _maxAutoTries = 3;
+  late List<StreamSource> _sources;
+  final Set<String> _tried = {};
+  bool _recovering = false;
+  bool _refreshed = false;
+  int _autoTries = 0;
+
+  String _urlKey(StreamSource s) => s.url.split('?').first;
+
   @override
   void initState() {
     super.initState();
     _current = widget.initialSource;
+    _sources = List.of(widget.sources);
     _player = Player();
     _videoController = VideoController(_player);
     _posSub = _player.stream.position.listen((p) {
@@ -95,10 +122,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         // The raw player error often contains the direct stream URL.
         // It goes to the log only — the UI never shows URLs, anywhere.
         debugPrint('[Player] playback error: $e');
-        setState(() {
-          _hasError = true;
-          _loading = false;
-        });
+        _tryRecover();
       }
     });
     _open(_current, startAt: widget.startAt);
@@ -128,19 +152,112 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _hasError = false;
       _current = source;
     });
+    _tried.add(_urlKey(source));
     final media = _isOffline
         ? Media(widget.offlineFilePath!)
-        : Media(
-            source.url,
-            httpHeaders: {'User-Agent': kUserAgent, 'Referer': kPlayerReferer},
-          );
-    await _player.open(media, play: true);
+        // Headers mirror the upstream MovieBox-Tui adapter: Referer +
+        // User-Agent, PLUS the session Cookie when the source carries
+        // one. Without the cookie the CDN answers 403 on the DASH
+        // manifest and on every segment — that was the playback failure.
+        // mpv applies these headers to the manifest AND segment
+        // requests, so one Media carries the whole fix.
+        : Media(source.url, httpHeaders: streamHeaders(source));
+    try {
+      await _player.open(media, play: true);
+    } catch (e) {
+      debugPrint('[Player] open failed: $e');
+      _tryRecover();
+      return;
+    }
     if (startAt > Duration.zero) {
       // Give the player a moment to buffer before seeking.
       await Future.delayed(const Duration(milliseconds: 600));
       await _player.seek(startAt);
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  /// Automatic recovery after a playback error. Bounded: at most
+  /// [_maxAutoTries] automatic attempts, then the error card appears.
+  /// First attempt is a fresh source refresh (new session cookie —
+  /// cookies are time-limited, so a stale one is the most common
+  /// failure); after that, the next untried source in the list.
+  Future<void> _tryRecover() async {
+    if (_recovering || _hasError || !mounted) return;
+    if (_autoTries >= _maxAutoTries) {
+      _showErrorCard();
+      return;
+    }
+    _recovering = true;
+    _autoTries++;
+    debugPrint(
+      '[Player] auto-recovery attempt $_autoTries/$_maxAutoTries',
+    );
+
+    // 1) Fresh sources once (fresh cookie) — the most common fix.
+    if (!_refreshed && !_isOffline) {
+      _refreshed = true;
+      try {
+        final fresh = await MovieBoxApi.instance.streams(
+          widget.subject.id,
+          season: widget.season,
+          episode: widget.episode,
+          detectors: widget.detectors,
+        );
+        if (fresh.isNotEmpty && mounted) {
+          _sources = fresh;
+          // New cookies: the same URLs are worth retrying.
+          _tried.clear();
+          final next = _nextUntried();
+          if (next != null) {
+            _recovering = false;
+            await _open(next, startAt: _position);
+            return;
+          }
+        }
+      } catch (e) {
+        debugPrint('[Player] source refresh failed: $e');
+      }
+    }
+
+    // 2) Next untried source (e.g. a direct mp4, which needs no cookie).
+    final next = _nextUntried();
+    _recovering = false;
+    if (next != null) {
+      await _open(next, startAt: _position);
+      return;
+    }
+
+    // 3) Nothing left to try.
+    _showErrorCard();
+  }
+
+  StreamSource? _nextUntried() {
+    for (final s in _sources) {
+      if (!_tried.contains(_urlKey(s))) return s;
+    }
+    return null;
+  }
+
+  void _showErrorCard() {
+    if (!mounted) return;
+    setState(() {
+      _hasError = true;
+      _loading = false;
+    });
+  }
+
+  /// Retry from the error card: fresh recovery budget (one more
+  /// refresh + fallback round) instead of replaying the dead source.
+  Future<void> _manualRetry() async {
+    setState(() {
+      _hasError = false;
+      _loading = true;
+    });
+    _refreshed = false;
+    _autoTries = 0;
+    _recovering = false;
+    await _tryRecover();
   }
 
   Future<void> _savePosition() async {
@@ -234,6 +351,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _switchQuality(StreamSource s) async {
     final pos = _position;
+    // Explicit user choice: fresh recovery budget for the new source.
+    _tried.clear();
+    _autoTries = 0;
+    _refreshed = false;
     await _open(s, startAt: pos);
     await _loadSubtitles();
   }
@@ -338,7 +459,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 FilledButton.icon(
-                  onPressed: () => _open(_current, startAt: _position),
+                  onPressed: _manualRetry,
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry'),
                 ),
@@ -395,11 +516,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
-            if (widget.sources.length > 1)
+            if (_sources.length > 1)
               _menuButton(
                 icon: Icons.hd_outlined,
                 label: 'Quality',
-                items: widget.sources
+                items: _sources
                     .map(
                       (s) => PopupMenuItem<StreamSource>(
                         value: s,
