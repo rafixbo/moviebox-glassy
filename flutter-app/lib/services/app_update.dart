@@ -47,13 +47,13 @@ class UpdateInfo {
   }
 
   Map<String, dynamic> toJson() => {
-        'latestVersion': latestVersion,
-        'latestBuild': latestBuild,
-        'minBuild': minBuild,
-        'apkUrl': apkUrl,
-        'windowsUrl': windowsUrl,
-        'notes': notes,
-      };
+    'latestVersion': latestVersion,
+    'latestBuild': latestBuild,
+    'minBuild': minBuild,
+    'apkUrl': apkUrl,
+    'windowsUrl': windowsUrl,
+    'notes': notes,
+  };
 }
 
 enum UpdateState { none, available, forced }
@@ -90,8 +90,10 @@ class AppUpdate {
           .timeout(const Duration(seconds: 10));
       if (resp.statusCode != 200) return null;
       final info = UpdateInfo.fromJson(
-          jsonDecode(resp.body) as Map<String, dynamic>);
-      final installed = installedBuildOverride ??
+        jsonDecode(resp.body) as Map<String, dynamic>,
+      );
+      final installed =
+          installedBuildOverride ??
           int.tryParse((await PackageInfo.fromPlatform()).buildNumber) ??
           0;
       final state = compareBuilds(installedBuild: installed, info: info);

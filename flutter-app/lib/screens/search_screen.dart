@@ -7,7 +7,7 @@ import '../api/models.dart';
 import '../api/moviebox_api.dart';
 import '../services/storage.dart';
 import '../theme.dart';
-import '../widgets/glass.dart';
+import '../widgets/app_widgets.dart';
 import 'details_screen.dart';
 
 const List<String> kTrendingSearches = [
@@ -102,7 +102,7 @@ class _SearchScreenState extends State<SearchScreen> {
       if (!mounted) return;
       setState(() {
         _searching = false;
-        _error = 'Search failed. Check connection and retry.\n$e';
+        _error = 'Search failed. Check your connection and tap Retry.';
       });
     }
   }
@@ -111,8 +111,10 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_loadingMore || !_hasMore || _controller.text.trim().isEmpty) return;
     setState(() => _loadingMore = true);
     try {
-      final res = await MovieBoxApi.instance
-          .search(_controller.text.trim(), page: _page + 1);
+      final res = await MovieBoxApi.instance.search(
+        _controller.text.trim(),
+        page: _page + 1,
+      );
       if (!mounted) return;
       setState(() {
         _page++;
@@ -137,9 +139,8 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _open(Subject s) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => DetailsScreen(subject: s)),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => DetailsScreen(subject: s)));
   }
 
   void _runSearch(String q) {
@@ -154,31 +155,24 @@ class _SearchScreenState extends State<SearchScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: GlassCard(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            radius: 16,
-            child: TextField(
-              controller: _controller,
-              onChanged: _onChanged,
-              onSubmitted: _search,
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: 'Search movies, TV shows…',
-                hintStyle: const TextStyle(color: GlassTheme.muted),
-                border: InputBorder.none,
-                prefixIcon: const Icon(Icons.search, color: GlassTheme.muted),
-                suffixIcon: _controller.text.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.clear, size: 20),
-                        onPressed: () {
-                          _controller.clear();
-                          _search('');
-                          setState(() {});
-                        },
-                      ),
-              ),
-            ),
+          child: SearchBar(
+            controller: _controller,
+            hintText: 'Search movies, TV shows…',
+            leading: const Icon(Icons.search),
+            trailing: [
+              if (_controller.text.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.clear, size: 20),
+                  onPressed: () {
+                    _controller.clear();
+                    _search('');
+                    setState(() {});
+                  },
+                ),
+            ],
+            onChanged: _onChanged,
+            onSubmitted: _search,
+            elevation: const WidgetStatePropertyAll(0),
           ),
         ),
         Padding(
@@ -195,10 +189,8 @@ class _SearchScreenState extends State<SearchScreen> {
                       SearchFilter.series => 'TV Shows',
                     }),
                     selected: _filter == f,
-                    selectedColor: GlassTheme.accent,
-                    backgroundColor: GlassTheme.glassFill,
+                    selectedColor: AppTheme.accent,
                     labelStyle: const TextStyle(fontSize: 12),
-                    side: const BorderSide(color: GlassTheme.glassBorder),
                     onSelected: (_) {
                       setState(() => _filter = f);
                       _applyFilter();
@@ -215,7 +207,23 @@ class _SearchScreenState extends State<SearchScreen> {
             child: Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(_error!, textAlign: TextAlign.center),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.cloud_off_outlined,
+                      size: 40,
+                      color: AppTheme.muted,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(_error!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () => _search(_controller.text),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
               ),
             ),
           )
@@ -242,44 +250,48 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _idle() => ListView(
-        padding: const EdgeInsets.all(16),
-        scrollCacheExtent: const ScrollCacheExtent.pixels(400),
-        children: [
-          if (_recent.isNotEmpty) ...[
-            const Text('Recent',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _recent
-                  .map((q) => ActionChip(
-                        label: Text(q),
-                        avatar: const Icon(Icons.history, size: 16),
-                        backgroundColor: GlassTheme.glassFill,
-                        side: const BorderSide(color: GlassTheme.glassBorder),
-                        onPressed: () => _runSearch(q),
-                      ))
-                  .toList(),
-            ),
-            const SizedBox(height: 20),
-          ],
-          const Text('Trending',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: kTrendingSearches
-                .map((q) => ActionChip(
-                      label: Text(q),
-                      avatar: const Icon(Icons.trending_up, size: 16),
-                      backgroundColor: GlassTheme.glassFill,
-                      side: const BorderSide(color: GlassTheme.glassBorder),
-                      onPressed: () => _runSearch(q),
-                    ))
-                .toList(),
-          ),
-        ],
-      );
+    padding: const EdgeInsets.all(16),
+    scrollCacheExtent: const ScrollCacheExtent.pixels(400),
+    children: [
+      if (_recent.isNotEmpty) ...[
+        const Text(
+          'Recent',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _recent
+              .map(
+                (q) => ActionChip(
+                  label: Text(q),
+                  avatar: const Icon(Icons.history, size: 16),
+                  onPressed: () => _runSearch(q),
+                ),
+              )
+              .toList(),
+        ),
+        const SizedBox(height: 20),
+      ],
+      const Text(
+        'Trending',
+        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: kTrendingSearches
+            .map(
+              (q) => ActionChip(
+                label: Text(q),
+                avatar: const Icon(Icons.trending_up, size: 16),
+                onPressed: () => _runSearch(q),
+              ),
+            )
+            .toList(),
+      ),
+    ],
+  );
 }

@@ -7,7 +7,7 @@ import '../api/models.dart';
 import '../api/moviebox_api.dart';
 import '../services/storage.dart';
 import '../theme.dart';
-import '../widgets/glass.dart';
+import '../widgets/app_widgets.dart';
 import 'details_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -67,34 +67,43 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      // Never show raw network errors (SocketException, ClientException…)
+      // to the user; the API layer already logged the technical detail.
       setState(() {
         _loading = false;
-        _error = 'Could not load the home feed. Pull to retry.\n$e';
+        _error =
+            "Couldn't reach the server. Check your connection and tap Retry.";
       });
     }
   }
 
   void _open(Subject s) {
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (_, _, _) => DetailsScreen(subject: s),
-        transitionsBuilder: (_, a, _, child) => FadeTransition(
-          opacity: a,
-          child: SlideTransition(
-            position: Tween(begin: const Offset(0.04, 0), end: Offset.zero)
-                .animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
-            child: child,
+    Navigator.of(context)
+        .push(
+          PageRouteBuilder(
+            pageBuilder: (_, _, _) => DetailsScreen(subject: s),
+            transitionsBuilder: (_, a, _, child) => FadeTransition(
+              opacity: a,
+              child: SlideTransition(
+                position: Tween(begin: const Offset(0.04, 0), end: Offset.zero)
+                    .animate(
+                      CurvedAnimation(parent: a, curve: Curves.easeOutCubic),
+                    ),
+                child: child,
+              ),
+            ),
+            transitionDuration: const Duration(milliseconds: 280),
           ),
-        ),
-        transitionDuration: const Duration(milliseconds: 280),
-      ),
-    ).then((_) => _refreshProgress());
+        )
+        .then((_) => _refreshProgress());
   }
 
   Future<void> _refreshProgress() async {
     final cw = await LocalStore.instance.continueWatching();
     if (mounted) {
-      setState(() => _progress = {for (final c in cw) c.subject.id: c.progress});
+      setState(
+        () => _progress = {for (final c in cw) c.subject.id: c.progress},
+      );
     }
   }
 
@@ -113,11 +122,15 @@ class _HomeScreenState extends State<HomeScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: GlassCard(
+          child: AppCard(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.cloud_off_outlined, size: 40, color: GlassTheme.muted),
+                const Icon(
+                  Icons.cloud_off_outlined,
+                  size: 40,
+                  color: AppTheme.muted,
+                ),
                 const SizedBox(height: 12),
                 Text(_error!, textAlign: TextAlign.center),
                 const SizedBox(height: 12),
@@ -130,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return RefreshIndicator(
       onRefresh: _load,
-      color: GlassTheme.accent,
+      color: AppTheme.accent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -140,11 +153,15 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Row(
               children: [
-                const Text('Trending now',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                const Text(
+                  'Trending now',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                ),
                 const Spacer(),
-                Text('${_all.length} titles',
-                    style: const TextStyle(fontSize: 12, color: GlassTheme.muted)),
+                Text(
+                  '${_all.length} titles',
+                  style: const TextStyle(fontSize: 12, color: AppTheme.muted),
+                ),
               ],
             ),
           ),
@@ -186,12 +203,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           fit: BoxFit.cover,
                           alignment: Alignment.topCenter,
                           placeholder: (_, _) =>
-                              Container(color: GlassTheme.surface),
+                              Container(color: AppTheme.surface),
                           errorWidget: (_, _, _) =>
-                              Container(color: GlassTheme.surface),
+                              Container(color: AppTheme.surface),
                         )
                       else
-                        Container(color: GlassTheme.surface),
+                        Container(color: AppTheme.surface),
                       Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
@@ -205,37 +222,57 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       Positioned(
-                        left: 16, right: 16, bottom: 14,
+                        left: 16,
+                        right: 16,
+                        bottom: 14,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(s.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontSize: 20, fontWeight: FontWeight.w800)),
+                            Text(
+                              s.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                             const SizedBox(height: 4),
                             Row(
                               children: [
                                 if (s.year != null)
-                                  Text(s.year!,
-                                      style: const TextStyle(
-                                          fontSize: 12, color: Colors.white70)),
+                                  Text(
+                                    s.year!,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
                                 if (s.rating != null) ...[
                                   const SizedBox(width: 10),
-                                  const Icon(Icons.star_rounded,
-                                      size: 14, color: Colors.amber),
-                                  Text(s.rating!,
-                                      style: const TextStyle(
-                                          fontSize: 12, color: Colors.white70)),
+                                  const Icon(
+                                    Icons.star_rounded,
+                                    size: 14,
+                                    color: Colors.amber,
+                                  ),
+                                  Text(
+                                    s.rating!,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
                                 ],
                                 if (s.isSeries) ...[
                                   const SizedBox(width: 10),
-                                  const Text('TV SERIES',
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: GlassTheme.accent2)),
+                                  const Text(
+                                    'TV SERIES',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.accent2,
+                                    ),
+                                  ),
                                 ],
                               ],
                             ),
@@ -258,10 +295,10 @@ class _HeroSkeleton extends StatelessWidget {
   const _HeroSkeleton();
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: Container(height: 230, color: const Color(0xFF1A1A24)),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Container(height: 230, color: const Color(0xFF1A1A24)),
+    ),
+  );
 }

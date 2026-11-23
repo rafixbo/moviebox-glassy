@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,7 +21,8 @@ const String kUserAgent =
     'com.community.oneroom/50020120 (Linux; U; Android 13; en_US; 23078RKD5C; Build/TQ2A.230405.003; Cronet/135.0.7012.3)';
 
 /// HMAC-MD5 secret from the upstream crypto module (hex).
-const String _secretHex = 'efa891974eecd3148df63aa611602defd101259ba521022c57ae0566bd8e';
+const String _secretHex =
+    'efa891974eecd3148df63aa611602defd101259ba521022c57ae0566bd8e';
 
 /// Cert SHA-256 used for the x-client-build tag (upstream constant).
 const String _certSha256 =
@@ -55,16 +58,21 @@ class MovieBoxSigning {
     required int timestampMs,
   }) {
     final uri = Uri.parse(url);
-    final pairs = uri.queryParametersAll.entries
-        .expand((e) => e.value.map((v) => MapEntry(e.key, v)))
-        .toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
+    final pairs =
+        uri.queryParametersAll.entries
+            .expand((e) => e.value.map((v) => MapEntry(e.key, v)))
+            .toList()
+          ..sort((a, b) => a.key.compareTo(b.key));
     final query = pairs.map((e) => '${e.key}=${e.value}').join('&');
     final canonicalUrl = query.isEmpty ? uri.path : '${uri.path}?$query';
     final bodyBytes = body == null ? null : utf8.encode(body);
     final bodyHash = bodyBytes == null
         ? ''
-        : _md5Hex(bodyBytes.length > 102400 ? bodyBytes.sublist(0, 102400) : bodyBytes);
+        : _md5Hex(
+            bodyBytes.length > 102400
+                ? bodyBytes.sublist(0, 102400)
+                : bodyBytes,
+          );
     final bodyLen = bodyBytes == null ? '' : '${bodyBytes.length}';
     return '${method.toUpperCase()}\napplication/json\napplication/json\n$bodyLen\n$timestampMs\n$bodyHash\n$canonicalUrl';
   }
@@ -77,7 +85,11 @@ class MovieBoxSigning {
     required int timestampMs,
   }) {
     final canonicalStr = canonical(
-        method: method, url: url, body: body, timestampMs: timestampMs);
+      method: method,
+      url: url,
+      body: body,
+      timestampMs: timestampMs,
+    );
     final key = _hexToBytes(_secretHex);
     final mac = Hmac(md5, key).convert(utf8.encode(canonicalStr)).bytes;
     return '$timestampMs|2|${base64Encode(mac)}';
@@ -93,9 +105,11 @@ class MovieBoxSigning {
   /// build = "{stamp}.{md5(certHex + 'oneroom' + stamp)}"
   static String clientBuild(int timestampMs, [int? randPart]) {
     final rand = randPart ?? Random().nextInt(1000);
-    final stamp = '${timestampMs ~/ 1000}'
+    final stamp =
+        '${timestampMs ~/ 1000}'
         '${(timestampMs % 1000).toString().padLeft(3, '0')}000$rand';
-    return '$stamp.${_md5Hex(utf8.encode('$_certSha256' 'oneroom$stamp'))}';
+    return '$stamp.${_md5Hex(utf8.encode('$_certSha256'
+    'oneroom$stamp'))}';
   }
 
   static List<int> _hexToBytes(String hex) {
@@ -114,23 +128,41 @@ class MovieBoxApi {
   final http.Client _client = http.Client();
   String? _token;
   int? _tokenExp; // epoch seconds from the JWT
-  int _activeHost = 0;
+  int _lastGoodIdx = 0; // host index that worked last time (persisted)
   String? _deviceId;
   String? _gaid;
   bool _idsLoaded = false;
+
+  /// Short per-host timeout: a dead or slow host must not stall the app.
+  /// Worst case for a full sweep is ~10s (first host + parallel race),
+  /// not 7 x 12s as before.
+  static const Duration _hostTimeout = Duration(seconds: 5);
+
+  /// Shown to the user when every host fails. Raw socket/DNS errors are
+  /// logged only (debugPrint) and never surfaced to the UI.
+  static const String kUnreachableMessage = 'Could not reach the server';
 
   Future<void> _ensureIds() async {
     if (_idsLoaded) return;
     final prefs = await SharedPreferences.getInstance();
     _deviceId = prefs.getString('mb_device_id') ?? _randomHex(32);
-    _gaid = prefs.getString('mb_gaid') ??
+    _gaid =
+        prefs.getString('mb_gaid') ??
         '${_randomHex(8)}-${_randomHex(4)}-${_randomHex(4)}-${_randomHex(4)}-${_randomHex(12)}';
     await prefs.setString('mb_device_id', _deviceId!);
     await prefs.setString('mb_gaid', _gaid!);
     _token = prefs.getString('mb_token');
     final exp = prefs.getInt('mb_token_exp');
     if (exp != null) _tokenExp = exp;
+    _lastGoodIdx = prefs.getInt('mb_last_good_host') ?? 0;
+    if (_lastGoodIdx < 0 || _lastGoodIdx >= _hosts.length) _lastGoodIdx = 0;
     _idsLoaded = true;
+  }
+
+  Future<void> _saveLastGood(int idx) async {
+    _lastGoodIdx = idx;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('mb_last_good_host', idx);
   }
 
   bool get _tokenValid {
@@ -153,7 +185,9 @@ class MovieBoxApi {
     );
     final data = json['data'] is Map ? json['data'] as Map : json;
     final token = data['token']?.toString() ?? '';
-    if (token.isEmpty) throw const MovieBoxException('Missing token from visitor-login');
+    if (token.isEmpty) {
+      throw const MovieBoxException('Missing token from visitor-login');
+    }
     _token = token;
     _tokenExp = _jwtExp(token);
     final prefs = await SharedPreferences.getInstance();
@@ -220,7 +254,11 @@ class MovieBoxApi {
       'Connection': 'keep-alive',
       'x-client-token': MovieBoxSigning.clientToken(ts),
       'x-tr-signature': MovieBoxSigning.trSignature(
-          method: method, url: url, body: body, timestampMs: ts),
+        method: method,
+        url: url,
+        body: body,
+        timestampMs: ts,
+      ),
       'x-client-build': build,
       'x-client-info': clientInfo,
       'x-client-status': '0',
@@ -232,6 +270,83 @@ class MovieBoxApi {
     return headers;
   }
 
+  /// One signed request against one host. Throws on any failure (DNS,
+  /// timeout, retryable/non-2xx status, bad JSON) so the caller can move
+  /// on to the next host.
+  Future<Map<String, dynamic>> _attempt(
+    String base,
+    String method,
+    String path, {
+    String? body,
+    String? token,
+  }) async {
+    final url = '$base$path';
+    final resp =
+        await (method == 'POST'
+                ? _client.post(
+                    Uri.parse(url),
+                    headers: _signedHeaders(
+                      method: method,
+                      url: url,
+                      body: body,
+                      token: token,
+                    ),
+                    body: body,
+                  )
+                : _client.get(
+                    Uri.parse(url),
+                    headers: _signedHeaders(
+                      method: method,
+                      url: url,
+                      body: null,
+                      token: token,
+                    ),
+                  ))
+            .timeout(_hostTimeout);
+    if (_retryStatuses.contains(resp.statusCode) ||
+        resp.statusCode < 200 ||
+        resp.statusCode >= 300) {
+      throw MovieBoxException('HTTP ${resp.statusCode}');
+    }
+    final decoded = jsonDecode(resp.body);
+    if (decoded is Map<String, dynamic>) return decoded;
+    return {'data': decoded};
+  }
+
+  /// Race several hosts in parallel; the first success wins and becomes
+  /// the new last-known-good host. Throws the first error if all fail.
+  /// Errors are swallowed per-attempt so no unhandled async errors escape
+  /// once the race has a winner.
+  Future<Map<String, dynamic>> _raceHosts(
+    List<int> indices,
+    String method,
+    String path, {
+    String? body,
+    String? token,
+  }) async {
+    final completer = Completer<Map<String, dynamic>>();
+    var failures = 0;
+    Object? firstError;
+    for (final idx in indices) {
+      _attempt(_hosts[idx], method, path, body: body, token: token)
+          .then((value) {
+            if (!completer.isCompleted) {
+              unawaited(_saveLastGood(idx));
+              completer.complete(value);
+            }
+          })
+          .catchError((Object e) {
+            firstError ??= e;
+            failures++;
+            if (failures == indices.length && !completer.isCompleted) {
+              completer.completeError(firstError!);
+            }
+            return null;
+          });
+    }
+    return completer.future;
+  }
+
   Future<Map<String, dynamic>> _requestRaw(
     String method,
     String path, {
@@ -240,43 +355,47 @@ class MovieBoxApi {
   }) async {
     await _ensureIds();
     final token = withAuth ? await ensureSession() : null;
+    // Try the last-known-good host first (fast path when healthy),
+    // then race the rest in parallel so one dead/slow host can't stall
+    // the app. Host list is unchanged (upstream, Nov 2026, still live).
+    final order = <int>[
+      _lastGoodIdx,
+      for (var i = 0; i < _hosts.length; i++)
+        if (i != _lastGoodIdx) i,
+    ];
     Object? lastError;
-    for (var i = 0; i < _hosts.length; i++) {
-      final idx = (_activeHost + i) % _hosts.length;
-      final base = _hosts[idx];
-      final url = '$base$path';
-      try {
-        final resp = await (method == 'POST'
-                ? _client.post(Uri.parse(url),
-                    headers: _signedHeaders(method: method, url: url, body: body, token: token),
-                    body: body)
-                : _client.get(Uri.parse(url),
-                    headers: _signedHeaders(method: method, url: url, body: null, token: token)))
-            .timeout(const Duration(seconds: 12));
-        if (_retryStatuses.contains(resp.statusCode)) {
-          _activeHost = (idx + 1) % _hosts.length;
-          lastError = MovieBoxException('HTTP ${resp.statusCode}');
-          if (resp.statusCode == 429) {
-            await Future.delayed(const Duration(milliseconds: 400));
-          }
-          continue;
-        }
-        if (resp.statusCode < 200 || resp.statusCode >= 300) {
-          throw MovieBoxException('HTTP ${resp.statusCode}');
-        }
-        _activeHost = idx;
-        final decoded = jsonDecode(resp.body);
-        if (decoded is Map<String, dynamic>) return decoded;
-        return {'data': decoded};
-      } catch (e) {
-        lastError = e;
-        _activeHost = (idx + 1) % _hosts.length;
-        continue;
-      }
+    try {
+      return await _attempt(
+        _hosts[order.first],
+        method,
+        path,
+        body: body,
+        token: token,
+      );
+    } catch (e) {
+      lastError = e;
     }
-    throw lastError is Exception
-        ? lastError
-        : const MovieBoxException('All hosts exhausted');
+    try {
+      return await _raceHosts(
+        order.sublist(1),
+        method,
+        path,
+        body: body,
+        token: token,
+      );
+    } catch (e) {
+      lastError = e;
+    }
+    // Technical detail goes to the log only — the UI shows a short
+    // friendly message. Auth failures (401/403) are rethrown as-is so the
+    // session-refresh path in _request still sees them.
+    debugPrint('[MovieBoxApi] all hosts failed for $path: $lastError');
+    if (lastError is MovieBoxException &&
+        (lastError.message.contains('401') ||
+            lastError.message.contains('403'))) {
+      throw lastError;
+    }
+    throw const MovieBoxException(kUnreachableMessage);
   }
 
   /// Request with one session refresh + retry on 401/403.
@@ -305,29 +424,43 @@ class MovieBoxApi {
       'perPage': 15,
       'subjectType': 0,
     });
-    final json = await _request('POST', '/wefeed-mobile-bff/subject-api/search/v2', body: body);
+    final json = await _request(
+      'POST',
+      '/wefeed-mobile-bff/subject-api/search/v2',
+      body: body,
+    );
     return parseSearchResults(json);
   }
 
-  Future<({List<Subject> hero, List<Subject> all})> homeFeed({int page = 1}) async {
-    final json =
-        await _request('GET', '/wefeed-mobile-bff/tab-operating?page=$page&tabId=2&version=');
+  Future<({List<Subject> hero, List<Subject> all})> homeFeed({
+    int page = 1,
+  }) async {
+    final json = await _request(
+      'GET',
+      '/wefeed-mobile-bff/tab-operating?page=$page&tabId=2&version=',
+    );
     return parseHomeFeed(json);
   }
 
   Future<Details> details(String subjectId) async {
     final json = await _request(
-        'GET', '/wefeed-mobile-bff/subject-api/get?subjectId=$subjectId');
+      'GET',
+      '/wefeed-mobile-bff/subject-api/get?subjectId=$subjectId',
+    );
     final data = json['data'];
-    final stype = (data is Map ? (data['subjectType'] ?? data['stype']) : null) ??
+    final stype =
+        (data is Map ? (data['subjectType'] ?? data['stype']) : null) ??
         json['subjectType'] ??
         1;
-    final isSeries = (stype is num ? stype.toInt() : int.tryParse('$stype') ?? 1) == 2;
+    final isSeries =
+        (stype is num ? stype.toInt() : int.tryParse('$stype') ?? 1) == 2;
     Map<String, dynamic>? seasonJson;
     if (isSeries) {
       try {
-        seasonJson = await _request('GET',
-            '/wefeed-mobile-bff/subject-api/season-info?subjectId=$subjectId');
+        seasonJson = await _request(
+          'GET',
+          '/wefeed-mobile-bff/subject-api/season-info?subjectId=$subjectId',
+        );
       } catch (_) {
         seasonJson = null; // seasons are best-effort; details still usable
       }
@@ -335,10 +468,15 @@ class MovieBoxApi {
     return Details.fromJson(json, seasonJson);
   }
 
-  Future<List<CaptionTrack>> captions(String subjectId, String resourceId) async {
+  Future<List<CaptionTrack>> captions(
+    String subjectId,
+    String resourceId,
+  ) async {
     try {
-      final json = await _request('GET',
-          '/wefeed-mobile-bff/subject-api/get-ext-captions?subjectId=$subjectId&resourceId=$resourceId');
+      final json = await _request(
+        'GET',
+        '/wefeed-mobile-bff/subject-api/get-ext-captions?subjectId=$subjectId&resourceId=$resourceId',
+      );
       return parseCaptions(json);
     } catch (_) {
       return const []; // subtitles are best-effort
@@ -351,20 +489,22 @@ class MovieBoxApi {
     int episode = 0,
     List<Map<String, dynamic>> detectors = const [],
   }) async {
-    final seEp = (season == 0 && episode == 0)
-        ? ''
-        : '&se=$season&ep=$episode';
+    final seEp = (season == 0 && episode == 0) ? '' : '&se=$season&ep=$episode';
     Map<String, dynamic>? playInfo;
     Map<String, dynamic>? resource;
     try {
-      playInfo = await _request('GET',
-          '/wefeed-mobile-bff/subject-api/play-info/v2?subjectId=$subjectId$seEp');
+      playInfo = await _request(
+        'GET',
+        '/wefeed-mobile-bff/subject-api/play-info/v2?subjectId=$subjectId$seEp',
+      );
     } catch (_) {
       playInfo = null;
     }
     try {
-      resource = await _request('GET',
-          '/wefeed-mobile-bff/subject-api/resource?subjectId=$subjectId$seEp&page=1&perPage=20');
+      resource = await _request(
+        'GET',
+        '/wefeed-mobile-bff/subject-api/resource?subjectId=$subjectId$seEp&page=1&perPage=20',
+      );
     } catch (_) {
       resource = null;
     }
@@ -395,8 +535,10 @@ class MovieBoxApi {
         final rid = (item['resourceId'] ?? item['id'])?.toString() ?? '';
         if (rid.isEmpty) continue;
         try {
-          final pos = await _request('GET',
-              '/wefeed-mobile-bff/subject-api/resource-position/v2?subjectId=$subjectId&resourceId=$rid&failUrl=${Uri.encodeComponent(placeholder)}');
+          final pos = await _request(
+            'GET',
+            '/wefeed-mobile-bff/subject-api/resource-position/v2?subjectId=$subjectId&resourceId=$rid&failUrl=${Uri.encodeComponent(placeholder)}',
+          );
           final posData = pos['data'];
           final posList = (posData is Map ? posData['list'] : null) as List?;
           if (posList != null) {
@@ -408,16 +550,18 @@ class MovieBoxApi {
               final res = p['resolution'] is num
                   ? (p['resolution'] as num).toInt()
                   : int.tryParse('${p['resolution']}') ?? 0;
-              recovered.add(StreamSource(
-                url: url,
-                label: res > 0 ? '${res}p' : 'Direct',
-                resolution: res,
-                sizeBytes: p['size'] is num
-                    ? (p['size'] as num).toInt()
-                    : int.tryParse('${p['size']}'),
-                uploader: p['uploadBy']?.toString(),
-                resourceId: rid,
-              ));
+              recovered.add(
+                StreamSource(
+                  url: url,
+                  label: res > 0 ? '${res}p' : 'Direct',
+                  resolution: res,
+                  sizeBytes: p['size'] is num
+                      ? (p['size'] as num).toInt()
+                      : int.tryParse('${p['size']}'),
+                  uploader: p['uploadBy']?.toString(),
+                  resourceId: rid,
+                ),
+              );
             }
           }
         } catch (_) {

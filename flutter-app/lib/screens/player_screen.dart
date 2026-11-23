@@ -11,7 +11,7 @@ import '../api/moviebox_api.dart';
 import '../services/storage.dart';
 import '../theme.dart';
 
-/// Glassy in-app player (media_kit — Android + Windows).
+/// Material in-app player (media_kit — Android + Windows).
 ///
 /// Honest note: some MovieBox resource links are *resolver* links
 /// (e.g. ugc-video.com) rather than direct media files; those may fail
@@ -114,8 +114,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _loadSubtitles() async {
     if (_isOffline || _current.resourceId == null) return;
-    final subs = await MovieBoxApi.instance
-        .captions(widget.subject.id, _current.resourceId!);
+    final subs = await MovieBoxApi.instance.captions(
+      widget.subject.id,
+      _current.resourceId!,
+    );
     if (mounted) setState(() => _subs = subs);
   }
 
@@ -127,10 +129,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
     final media = _isOffline
         ? Media(widget.offlineFilePath!)
-        : Media(source.url, httpHeaders: {
-            'User-Agent': kUserAgent,
-            'Referer': kPlayerReferer,
-          });
+        : Media(
+            source.url,
+            httpHeaders: {'User-Agent': kUserAgent, 'Referer': kPlayerReferer},
+          );
     await _player.open(media, play: true);
     if (startAt > Duration.zero) {
       // Give the player a moment to buffer before seeking.
@@ -180,9 +182,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _seekBy(Duration delta) {
     final target = _position + delta;
-    _player.seek(target < Duration.zero
-        ? Duration.zero
-        : (target > _duration ? _duration : target));
+    _player.seek(
+      target < Duration.zero
+          ? Duration.zero
+          : (target > _duration ? _duration : target),
+    );
     _showGestureHint(delta.isNegative ? '−10s' : '+10s');
   }
 
@@ -239,7 +243,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       setState(() => _subLabel = null);
     } else {
       await _player.setSubtitleTrack(
-          SubtitleTrack.uri(sub.url, title: sub.name));
+        SubtitleTrack.uri(sub.url, title: sub.name),
+      );
       setState(() => _subLabel = sub.name);
     }
   }
@@ -256,14 +261,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
               onTap: _toggleControls,
               onDoubleTapDown: (d) {
                 final w = MediaQuery.sizeOf(context).width;
-                _seekBy(d.globalPosition.dx < w / 2
-                    ? const Duration(seconds: -10)
-                    : const Duration(seconds: 10));
+                _seekBy(
+                  d.globalPosition.dx < w / 2
+                      ? const Duration(seconds: -10)
+                      : const Duration(seconds: 10),
+                );
               },
               onVerticalDragUpdate: (d) {
                 final w = MediaQuery.sizeOf(context).width;
-                _onVerticalDrag(
-                    d.delta.dy, d.globalPosition.dx < w / 2);
+                _onVerticalDrag(d.delta.dy, d.globalPosition.dx < w / 2);
               },
               child: Video(
                 controller: _videoController,
@@ -271,20 +277,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 fit: BoxFit.contain,
               ),
             ),
-            if (_loading)
-              const Center(child: CircularProgressIndicator()),
+            if (_loading) const Center(child: CircularProgressIndicator()),
             if (_gestureHint != null)
               Center(
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(_gestureHint!,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700)),
+                  child: Text(
+                    _gestureHint!,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
             if (_hasError) _errorCard(),
@@ -296,249 +307,267 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _errorCard() => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.black87,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white24),
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.black87,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 40, color: Colors.redAccent),
+            const SizedBox(height: 12),
+            const Text(
+              'Playback failed',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            const SizedBox(height: 6),
+            Text(
+              'This source could not be played in-app. '
+              'It may be a resolver link — try another quality or an external player.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppTheme.muted),
+            ),
+            if (_errorText.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                _errorText,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 11, color: Colors.white38),
+              ),
+            ],
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, size: 40, color: Colors.redAccent),
-                const SizedBox(height: 12),
-                const Text('Playback failed',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 6),
-                Text(
-                  'This source could not be played in-app. '
-                  'It may be a resolver link — try another quality or an external player.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: GlassTheme.muted),
+                FilledButton.icon(
+                  onPressed: () => _open(_current, startAt: _position),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
                 ),
-                if (_errorText.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(_errorText,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 11, color: Colors.white38)),
-                ],
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: () => _open(_current, startAt: _position),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
-                    ),
-                    const SizedBox(width: 10),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final uri = Uri.parse(_current.url);
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri,
-                              mode: LaunchMode.externalApplication);
-                        }
-                      },
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('Open externally'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Back'),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final uri = Uri.parse(_current.url);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('Open externally'),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Back'),
+            ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 
   Widget _controls() => Column(
-        children: [
-          // Top bar.
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.black.withValues(alpha: 0.7), Colors.transparent],
+    children: [
+      // Top bar.
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.black.withValues(alpha: 0.7), Colors.transparent],
+          ),
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => Navigator.pop(context),
+            ),
+            Expanded(
+              child: Text(
+                widget.subject.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
-            child: Row(
+            if (widget.sources.length > 1)
+              _menuButton(
+                icon: Icons.hd_outlined,
+                label: 'Quality',
+                items: widget.sources
+                    .map(
+                      (s) => PopupMenuItem<StreamSource>(
+                        value: s,
+                        child: Text(
+                          '${s.label}${s.sizeLabel.isNotEmpty ? ' · ${s.sizeLabel}' : ''}',
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onSelected: _switchQuality,
+              ),
+            _menuButton(
+              icon: Icons.speed,
+              label: 'Speed',
+              items: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+                  .map(
+                    (r) =>
+                        PopupMenuItem<double>(value: r, child: Text('${r}x')),
+                  )
+                  .toList(),
+              onSelected: (r) async {
+                await _player.setRate(r);
+                setState(() => _rate = r);
+              },
+            ),
+            _menuButton(
+              icon: Icons.subtitles_outlined,
+              label: 'Subtitles',
+              items: [
+                const PopupMenuItem<CaptionTrack?>(
+                  value: null,
+                  child: Text('Off'),
+                ),
+                ..._subs.map(
+                  (s) => PopupMenuItem<CaptionTrack?>(
+                    value: s,
+                    child: Text(s.name),
+                  ),
+                ),
+              ],
+              onSelected: _pickSubtitle,
+            ),
+            _menuButton(
+              icon: Icons.bedtime_outlined,
+              label: 'Sleep timer',
+              items: const [
+                PopupMenuItem<Duration?>(value: null, child: Text('Off')),
+                PopupMenuItem<Duration?>(
+                  value: Duration(minutes: 15),
+                  child: Text('15 min'),
+                ),
+                PopupMenuItem<Duration?>(
+                  value: Duration(minutes: 30),
+                  child: Text('30 min'),
+                ),
+                PopupMenuItem<Duration?>(
+                  value: Duration(minutes: 60),
+                  child: Text('60 min'),
+                ),
+              ],
+              onSelected: _setSleep,
+            ),
+          ],
+        ),
+      ),
+      const Spacer(),
+      // Bottom bar.
+      Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [Colors.black.withValues(alpha: 0.75), Colors.transparent],
+          ),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Text(_fmt(_position), style: const TextStyle(fontSize: 12)),
+                Expanded(
+                  child: Slider(
+                    value: _position.inMilliseconds.toDouble().clamp(
+                      0,
+                      _duration.inMilliseconds.toDouble(),
+                    ),
+                    max: _duration.inMilliseconds.toDouble() > 0
+                        ? _duration.inMilliseconds.toDouble()
+                        : 1,
+                    onChanged: (v) =>
+                        _player.seek(Duration(milliseconds: v.round())),
+                    activeColor: AppTheme.accent,
+                  ),
+                ),
+                Text(_fmt(_duration), style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => Navigator.pop(context),
+                  tooltip: 'Back 10s',
+                  icon: const Icon(Icons.replay_10),
+                  onPressed: () => _seekBy(const Duration(seconds: -10)),
                 ),
-                Expanded(
-                  child: Text(
-                    widget.subject.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                const SizedBox(width: 12),
+                IconButton(
+                  iconSize: 56,
+                  icon: Icon(
+                    _playing
+                        ? Icons.pause_circle_filled
+                        : Icons.play_circle_filled,
                   ),
-                ),
-                if (widget.sources.length > 1)
-                  _menuButton(
-                    icon: Icons.hd_outlined,
-                    label: 'Quality',
-                    items: widget.sources
-                        .map((s) => PopupMenuItem<StreamSource>(
-                              value: s,
-                              child: Text(
-                                  '${s.label}${s.sizeLabel.isNotEmpty ? ' · ${s.sizeLabel}' : ''}'),
-                            ))
-                        .toList(),
-                    onSelected: _switchQuality,
-                  ),
-                _menuButton(
-                  icon: Icons.speed,
-                  label: 'Speed',
-                  items: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
-                      .map((r) => PopupMenuItem<double>(
-                            value: r,
-                            child: Text('${r}x'),
-                          ))
-                      .toList(),
-                  onSelected: (r) async {
-                    await _player.setRate(r);
-                    setState(() => _rate = r);
+                  onPressed: () {
+                    _playing ? _player.pause() : _player.play();
+                    _armHideTimer();
                   },
                 ),
-                _menuButton(
-                  icon: Icons.subtitles_outlined,
-                  label: 'Subtitles',
-                  items: [
-                    const PopupMenuItem<CaptionTrack?>(
-                        value: null, child: Text('Off')),
-                    ..._subs.map((s) => PopupMenuItem<CaptionTrack?>(
-                        value: s, child: Text(s.name))),
-                  ],
-                  onSelected: _pickSubtitle,
-                ),
-                _menuButton(
-                  icon: Icons.bedtime_outlined,
-                  label: 'Sleep timer',
-                  items: const [
-                    PopupMenuItem<Duration?>(value: null, child: Text('Off')),
-                    PopupMenuItem<Duration?>(
-                        value: Duration(minutes: 15), child: Text('15 min')),
-                    PopupMenuItem<Duration?>(
-                        value: Duration(minutes: 30), child: Text('30 min')),
-                    PopupMenuItem<Duration?>(
-                        value: Duration(minutes: 60), child: Text('60 min')),
-                  ],
-                  onSelected: _setSleep,
+                const SizedBox(width: 12),
+                IconButton(
+                  tooltip: 'Forward 10s',
+                  icon: const Icon(Icons.forward_10),
+                  onPressed: () => _seekBy(const Duration(seconds: 10)),
                 ),
               ],
             ),
-          ),
-          const Spacer(),
-          // Bottom bar.
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                colors: [Colors.black.withValues(alpha: 0.75), Colors.transparent],
+            if (_sleepLeft != null || _subLabel != null || _rate != 1.0)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  [
+                    if (_rate != 1.0) '${_rate}x',
+                    if (_subLabel != null) 'CC: $_subLabel',
+                    if (_sleepLeft != null)
+                      'Sleep ${_sleepLeft!.inMinutes} min',
+                  ].join('  ·  '),
+                  style: const TextStyle(fontSize: 11, color: Colors.white70),
+                ),
               ),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Text(_fmt(_position),
-                        style: const TextStyle(fontSize: 12)),
-                    Expanded(
-                      child: Slider(
-                        value: _position.inMilliseconds.toDouble().clamp(
-                            0, _duration.inMilliseconds.toDouble()),
-                        max: _duration.inMilliseconds.toDouble() > 0
-                            ? _duration.inMilliseconds.toDouble()
-                            : 1,
-                        onChanged: (v) =>
-                            _player.seek(Duration(milliseconds: v.round())),
-                        activeColor: GlassTheme.accent,
-                      ),
-                    ),
-                    Text(_fmt(_duration),
-                        style: const TextStyle(fontSize: 12)),
-                  ],
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      tooltip: 'Back 10s',
-                      icon: const Icon(Icons.replay_10),
-                      onPressed: () =>
-                          _seekBy(const Duration(seconds: -10)),
-                    ),
-                    const SizedBox(width: 12),
-                    IconButton(
-                      iconSize: 56,
-                      icon: Icon(_playing
-                          ? Icons.pause_circle_filled
-                          : Icons.play_circle_filled),
-                      onPressed: () {
-                        _playing ? _player.pause() : _player.play();
-                        _armHideTimer();
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    IconButton(
-                      tooltip: 'Forward 10s',
-                      icon: const Icon(Icons.forward_10),
-                      onPressed: () =>
-                          _seekBy(const Duration(seconds: 10)),
-                    ),
-                  ],
-                ),
-                if (_sleepLeft != null || _subLabel != null || _rate != 1.0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      [
-                        if (_rate != 1.0) '${_rate}x',
-                        if (_subLabel != null) 'CC: $_subLabel',
-                        if (_sleepLeft != null)
-                          'Sleep ${_sleepLeft!.inMinutes} min',
-                      ].join('  ·  '),
-                      style: const TextStyle(
-                          fontSize: 11, color: Colors.white70),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      );
+          ],
+        ),
+      ),
+    ],
+  );
 
   Widget _menuButton<T>({
     required IconData icon,
     required String label,
     required List<PopupMenuItem<T>> items,
     required void Function(T) onSelected,
-  }) =>
-      PopupMenuButton<T>(
-        icon: Icon(icon),
-        tooltip: label,
-        color: GlassTheme.surface,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14)),
-        onSelected: onSelected,
-        itemBuilder: (_) => items,
-      );
+  }) => PopupMenuButton<T>(
+    icon: Icon(icon),
+    tooltip: label,
+    color: AppTheme.surface,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    onSelected: onSelected,
+    itemBuilder: (_) => items,
+  );
 }
 
 String _fmt(Duration d) {

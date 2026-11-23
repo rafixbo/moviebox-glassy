@@ -2,28 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moviebox_glassy/api/models.dart';
 import 'package:moviebox_glassy/theme.dart';
-import 'package:moviebox_glassy/widgets/glass.dart';
+import 'package:moviebox_glassy/widgets/app_widgets.dart';
 
-/// Smoke test: the glassy theme + poster card render without errors.
+/// Smoke test: the Material 3 theme + poster card render without errors.
 /// (Full screens hit the live API, so they are covered by the parsing +
 /// signing tests instead of a networked widget test.)
 void main() {
   testWidgets('poster card renders title, year and rating', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: GlassTheme.theme,
+        theme: AppTheme.theme,
         home: Scaffold(
-          body: GlassBackground(
-            child: PosterCard(
-              subject: const Subject(
-                id: '1',
-                title: 'Avengers: Doomsday',
-                type: MediaType.movie,
-                year: '2026',
-                rating: '6.5',
-              ),
-              onTap: () {},
+          body: PosterCard(
+            subject: const Subject(
+              id: '1',
+              title: 'Avengers: Doomsday',
+              type: MediaType.movie,
+              year: '2026',
+              rating: '6.5',
             ),
+            onTap: () {},
           ),
         ),
       ),
@@ -34,14 +32,12 @@ void main() {
     expect(find.text('6.5'), findsOneWidget);
   });
 
-  testWidgets('glass card renders its child', (tester) async {
+  testWidgets('app card renders its child', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: GlassCard(child: Text('glassy')),
-        ),
+        home: Scaffold(body: AppCard(child: Text('material'))),
       ),
     );
-    expect(find.text('glassy'), findsOneWidget);
+    expect(find.text('material'), findsOneWidget);
   });
 }

@@ -44,7 +44,10 @@ class LocalStore {
     } else {
       list.insert(0, s);
     }
-    await p.setStringList(_favKey, list.map((e) => jsonEncode(e.toJson())).toList());
+    await p.setStringList(
+      _favKey,
+      list.map((e) => jsonEncode(e.toJson())).toList(),
+    );
   }
 
   // ---- History (most recent first, max 50) ----
@@ -69,7 +72,9 @@ class LocalStore {
     list.removeWhere((e) => e.id == s.id);
     list.insert(0, s);
     await p.setStringList(
-        _histKey, list.take(50).map((e) => jsonEncode(e.toJson())).toList());
+      _histKey,
+      list.take(50).map((e) => jsonEncode(e.toJson())).toList(),
+    );
   }
 
   Future<void> clearHistory() async {
@@ -90,7 +95,8 @@ class LocalStore {
     final p = await _prefs;
     final key = '${subject.id}|$season|$episode';
     final all = Map<String, dynamic>.from(
-        jsonDecode(p.getString(_posKey) ?? '{}') as Map);
+      jsonDecode(p.getString(_posKey) ?? '{}') as Map,
+    );
     if (position.inSeconds >= duration.inSeconds * 0.95) {
       all.remove(key);
     } else {
@@ -109,7 +115,11 @@ class LocalStore {
     await p.setString(_posKey, jsonEncode(all));
   }
 
-  Future<Duration?> positionFor(String subjectId, int season, int episode) async {
+  Future<Duration?> positionFor(
+    String subjectId,
+    int season,
+    int episode,
+  ) async {
     final p = await _prefs;
     final all = jsonDecode(p.getString(_posKey) ?? '{}') as Map;
     final e = all['$subjectId|$season|$episode'];
@@ -129,21 +139,24 @@ class LocalStore {
       final dur = (v['dur'] is num) ? (v['dur'] as num).toInt() : 0;
       final pos = (v['pos'] is num) ? (v['pos'] as num).toInt() : 0;
       if (dur <= 0 || pos <= 0) continue;
-      items.add(ContinueItem(
-        subject: Subject(
-          id: (e.key as String).split('|').first,
-          title: v['title']?.toString() ?? '',
-          type: (v['type'] ?? 1) == 2 ? MediaType.series : MediaType.movie,
-          year: v['year']?.toString(),
-          posterUrl: v['poster']?.toString(),
+      items.add(
+        ContinueItem(
+          subject: Subject(
+            id: (e.key as String).split('|').first,
+            title: v['title']?.toString() ?? '',
+            type: (v['type'] ?? 1) == 2 ? MediaType.series : MediaType.movie,
+            year: v['year']?.toString(),
+            posterUrl: v['poster']?.toString(),
+          ),
+          season: (v['season'] is num) ? (v['season'] as num).toInt() : 0,
+          episode: (v['episode'] is num) ? (v['episode'] as num).toInt() : 0,
+          position: Duration(seconds: pos),
+          duration: Duration(seconds: dur),
+          updatedAt: DateTime.fromMillisecondsSinceEpoch(
+            (v['at'] is num) ? (v['at'] as num).toInt() : 0,
+          ),
         ),
-        season: (v['season'] is num) ? (v['season'] as num).toInt() : 0,
-        episode: (v['episode'] is num) ? (v['episode'] as num).toInt() : 0,
-        position: Duration(seconds: pos),
-        duration: Duration(seconds: dur),
-        updatedAt: DateTime.fromMillisecondsSinceEpoch(
-            (v['at'] is num) ? (v['at'] as num).toInt() : 0),
-      ));
+      );
     }
     items.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return items;

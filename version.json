@@ -1,1 +1,8 @@
-{"apkUrl":"https://github.com/rafixbo/moviebox-glassy/releases/latest","latestBuild":1,"latestVersion":"1.0.0","minBuild":1,"notes":"First release","windowsUrl":"https://github.com/rafixbo/moviebox-glassy/releases/latest"}
+{
+  "apkUrl": "https://github.com/rafixbo/moviebox-glassy/releases/latest",
+  "latestBuild": 2,
+  "latestVersion": "1.0.1",
+  "minBuild": 1,
+  "notes": "Fix home feed server failover (last-good host, parallel race, 5s timeout, friendly errors) and Material 3 UI",
+  "windowsUrl": "https://github.com/rafixbo/moviebox-glassy/releases/latest"
+}

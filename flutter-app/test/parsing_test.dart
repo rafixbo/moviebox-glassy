@@ -127,7 +127,11 @@ void main() {
           'genre': 'Drama',
           'cover': {'url': 'https://x/9.jpg'},
           'dubs': [
-            {'subjectId': '10', 'lanName': 'Hindi', 'title': 'Test Show [Hindi]'},
+            {
+              'subjectId': '10',
+              'lanName': 'Hindi',
+              'title': 'Test Show [Hindi]',
+            },
           ],
           'resourceDetectors': [
             {
@@ -142,7 +146,10 @@ void main() {
       {
         'data': {
           'seasons': [
-            {'se': 1, 'episodeNumbers': [1, 2, 3]},
+            {
+              'se': 1,
+              'episodeNumbers': [1, 2, 3],
+            },
             {'se': 2, 'maxEp': 2},
           ],
         },

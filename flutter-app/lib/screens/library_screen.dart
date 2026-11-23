@@ -5,7 +5,7 @@ import '../api/models.dart';
 import '../services/downloads.dart';
 import '../services/storage.dart';
 import '../theme.dart';
-import '../widgets/glass.dart';
+import '../widgets/app_widgets.dart';
 import 'details_screen.dart';
 import 'player_screen.dart';
 
@@ -66,9 +66,9 @@ class _LibraryScreenState extends State<LibraryScreen>
         TabBar(
           controller: _tabs,
           isScrollable: true,
-          indicatorColor: GlassTheme.accent,
-          labelColor: GlassTheme.text,
-          unselectedLabelColor: GlassTheme.muted,
+          indicatorColor: AppTheme.accent,
+          labelColor: AppTheme.text,
+          unselectedLabelColor: AppTheme.muted,
           tabs: const [
             Tab(text: 'Favorites'),
             Tab(text: 'Watching'),
@@ -92,13 +92,15 @@ class _LibraryScreenState extends State<LibraryScreen>
   }
 
   Widget _empty(String text) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(text,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: GlassTheme.muted)),
-        ),
-      );
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: AppTheme.muted),
+      ),
+    ),
+  );
 
   Widget _favTab() => _favs.isEmpty
       ? _empty('No favorites yet.\nTap the heart on any title to save it here.')
@@ -106,7 +108,9 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   Widget _watchingTab() {
     if (_cw.isEmpty) {
-      return _empty('Nothing in progress.\nStart a title and your position is saved here.');
+      return _empty(
+        'Nothing in progress.\nStart a title and your position is saved here.',
+      );
     }
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -116,7 +120,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         final c = _cw[i];
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: GlassCard(
+          child: AppCard(
             padding: const EdgeInsets.all(10),
             onTap: () => _open(c.subject),
             child: Row(
@@ -128,11 +132,16 @@ class _LibraryScreenState extends State<LibraryScreen>
                     height: 84,
                     child: c.subject.posterUrl == null
                         ? Container(
-                            color: GlassTheme.surface,
-                            child: const Icon(Icons.movie_outlined,
-                                color: GlassTheme.muted))
-                        : Image.network(c.subject.posterUrl!,
-                            fit: BoxFit.cover),
+                            color: AppTheme.surface,
+                            child: const Icon(
+                              Icons.movie_outlined,
+                              color: AppTheme.muted,
+                            ),
+                          )
+                        : Image.network(
+                            c.subject.posterUrl!,
+                            fit: BoxFit.cover,
+                          ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -140,15 +149,19 @@ class _LibraryScreenState extends State<LibraryScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(c.subject.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Text(
+                        c.subject.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         '${c.label} · ${_fmt(c.position)} / ${_fmt(c.duration)}',
                         style: const TextStyle(
-                            fontSize: 12, color: GlassTheme.muted),
+                          fontSize: 12,
+                          color: AppTheme.muted,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       LinearProgressIndicator(
@@ -156,7 +169,8 @@ class _LibraryScreenState extends State<LibraryScreen>
                         minHeight: 4,
                         backgroundColor: Colors.white12,
                         valueColor: const AlwaysStoppedAnimation(
-                            GlassTheme.accent2),
+                          AppTheme.accent2,
+                        ),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ],
@@ -176,7 +190,9 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   Widget _downloadsTab() {
     if (_downloads.isEmpty) {
-      return _empty('No downloads yet.\nPick a quality in a title and tap the download icon.');
+      return _empty(
+        'No downloads yet.\nPick a quality in a title and tap the download icon.',
+      );
     }
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -186,7 +202,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         final d = _downloads[i];
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: GlassCard(
+          child: AppCard(
             padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,48 +210,47 @@ class _LibraryScreenState extends State<LibraryScreen>
                 Row(
                   children: [
                     Expanded(
-                      child: Text(d.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      child: Text(
+                        d.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
                     IconButton(
                       tooltip: 'Delete',
                       icon: const Icon(Icons.delete_outline, size: 20),
-                      onPressed: () =>
-                          DownloadManager.instance.delete(d.id),
+                      onPressed: () => DownloadManager.instance.delete(d.id),
                     ),
                   ],
                 ),
-                Text(d.label,
-                    style: const TextStyle(fontSize: 12, color: GlassTheme.muted)),
+                Text(
+                  d.label,
+                  style: const TextStyle(fontSize: 12, color: AppTheme.muted),
+                ),
                 const SizedBox(height: 8),
                 if (d.status == DownloadStatus.downloading ||
                     d.status == DownloadStatus.paused)
                   LinearProgressIndicator(
                     value: d.progress > 0 ? d.progress : null,
                     backgroundColor: Colors.white12,
-                    valueColor: const AlwaysStoppedAnimation(GlassTheme.accent),
+                    valueColor: const AlwaysStoppedAnimation(AppTheme.accent),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text(
-                      switch (d.status) {
-                        DownloadStatus.downloading =>
-                          '${(d.progress * 100).round()}% downloading',
-                        DownloadStatus.paused => 'Paused',
-                        DownloadStatus.completed => 'Ready offline',
-                        DownloadStatus.failed => 'Failed — tap to retry',
-                      },
-                      style: const TextStyle(fontSize: 12),
-                    ),
+                    Text(switch (d.status) {
+                      DownloadStatus.downloading =>
+                        '${(d.progress * 100).round()}% downloading',
+                      DownloadStatus.paused => 'Paused',
+                      DownloadStatus.completed => 'Ready offline',
+                      DownloadStatus.failed => 'Failed — tap to retry',
+                    }, style: const TextStyle(fontSize: 12)),
                     const Spacer(),
                     if (d.status == DownloadStatus.paused)
                       TextButton(
-                        onPressed: () =>
-                            DownloadManager.instance.resume(d.id),
+                        onPressed: () => DownloadManager.instance.resume(d.id),
                         child: const Text('Resume'),
                       ),
                     if (d.status == DownloadStatus.completed)
@@ -244,9 +259,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                         icon: const Icon(Icons.play_arrow_rounded, size: 18),
                         label: const Text('Play offline'),
                         style: FilledButton.styleFrom(
-                          backgroundColor: GlassTheme.accent,
+                          backgroundColor: AppTheme.accent,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                         ),
                       ),
                   ],
@@ -291,7 +308,9 @@ class _LibraryScreenState extends State<LibraryScreen>
             label: const Text('Clear history'),
           ),
         ),
-        Expanded(child: PosterGrid(items: _history, onTap: _open)),
+        Expanded(
+          child: PosterGrid(items: _history, onTap: _open),
+        ),
       ],
     );
   }
@@ -301,6 +320,8 @@ String _fmt(Duration d) {
   final h = d.inHours;
   final m = d.inMinutes % 60;
   final s = d.inSeconds % 60;
-  if (h > 0) return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  if (h > 0) {
+    return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
   return '$m:${s.toString().padLeft(2, '0')}';
 }

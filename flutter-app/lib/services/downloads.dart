@@ -31,24 +31,22 @@ class DownloadItem {
     this.status = DownloadStatus.downloading,
   });
 
-  double get progress =>
-      totalBytes <= 0 ? 0 : downloadedBytes / totalBytes;
+  double get progress => totalBytes <= 0 ? 0 : downloadedBytes / totalBytes;
 
   DownloadItem copyWith({
     int? totalBytes,
     int? downloadedBytes,
     DownloadStatus? status,
-  }) =>
-      DownloadItem(
-        id: id,
-        title: title,
-        label: label,
-        filePath: filePath,
-        url: url,
-        totalBytes: totalBytes ?? this.totalBytes,
-        downloadedBytes: downloadedBytes ?? this.downloadedBytes,
-        status: status ?? this.status,
-      );
+  }) => DownloadItem(
+    id: id,
+    title: title,
+    label: label,
+    filePath: filePath,
+    url: url,
+    totalBytes: totalBytes ?? this.totalBytes,
+    downloadedBytes: downloadedBytes ?? this.downloadedBytes,
+    status: status ?? this.status,
+  );
 }
 
 enum DownloadStatus { downloading, paused, completed, failed }
@@ -63,8 +61,8 @@ class DownloadManager {
   final Map<String, CancelToken> _tokens = {};
 
   Stream<List<DownloadItem>> get stream => _controller.stream;
-  List<DownloadItem> get items => _items.values.toList()
-    ..sort((a, b) => a.title.compareTo(b.title));
+  List<DownloadItem> get items =>
+      _items.values.toList()..sort((a, b) => a.title.compareTo(b.title));
 
   void _emit() => _controller.add(items);
 
@@ -102,7 +100,8 @@ class DownloadManager {
     final item = DownloadItem(
       id: id,
       title: title,
-      label: '${season > 0 || episode > 0 ? 'S$season E$episode · ' : ''}$qualityLabel',
+      label:
+          '${season > 0 || episode > 0 ? 'S$season E$episode · ' : ''}$qualityLabel',
       filePath: path,
       url: url,
     );
@@ -159,7 +158,9 @@ class DownloadManager {
       }
     } catch (_) {
       final cur = _items[item.id];
-      if (cur != null) _items[item.id] = cur.copyWith(status: DownloadStatus.failed);
+      if (cur != null) {
+        _items[item.id] = cur.copyWith(status: DownloadStatus.failed);
+      }
     } finally {
       _tokens.remove(item.id);
       _emit();

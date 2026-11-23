@@ -7,7 +7,7 @@ import '../api/moviebox_api.dart';
 import '../services/downloads.dart';
 import '../services/storage.dart';
 import '../theme.dart';
-import '../widgets/glass.dart';
+import '../widgets/app_widgets.dart';
 import 'player_screen.dart';
 
 class DetailsScreen extends StatefulWidget {
@@ -48,7 +48,10 @@ class _DetailsScreenState extends State<DetailsScreen> {
       final d = await MovieBoxApi.instance.details(widget.subject.id);
       final fav = await LocalStore.instance.isFavorite(widget.subject.id);
       final pos = await LocalStore.instance.positionFor(
-          widget.subject.id, d.isSeries ? 1 : 0, d.isSeries ? 1 : 0);
+        widget.subject.id,
+        d.isSeries ? 1 : 0,
+        d.isSeries ? 1 : 0,
+      );
       if (!mounted) return;
       setState(() {
         _details = d;
@@ -67,7 +70,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Could not load details.\n$e';
+        _error = 'Could not load details. Check your connection and tap Retry.';
       });
     }
   }
@@ -91,8 +94,6 @@ class _DetailsScreenState extends State<DetailsScreen> {
     return showDialog<Duration>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: GlassTheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Continue watching?'),
         content: Text('Resume from ${_fmt(pos)}?'),
         actions: [
@@ -122,26 +123,31 @@ class _DetailsScreenState extends State<DetailsScreen> {
           builder: (ctx, setSheet) {
             if (loading) {
               MovieBoxApi.instance
-                  .streams(_activeId,
-                      season: _subject.isSeries ? _season : 0,
-                      episode: _subject.isSeries ? _episode : 0,
-                      detectors: _details?.detectors ?? const [])
+                  .streams(
+                    _activeId,
+                    season: _subject.isSeries ? _season : 0,
+                    episode: _subject.isSeries ? _episode : 0,
+                    detectors: _details?.detectors ?? const [],
+                  )
                   .then((s) {
-                if (ctx.mounted) {
-                  setSheet(() {
-                    sources = s;
-                    loading = false;
-                    if (s.isEmpty) error = 'No playable sources found for this title.';
+                    if (ctx.mounted) {
+                      setSheet(() {
+                        sources = s;
+                        loading = false;
+                        if (s.isEmpty) {
+                          error = 'No playable sources found for this title.';
+                        }
+                      });
+                    }
+                  })
+                  .catchError((e) {
+                    if (ctx.mounted) {
+                      setSheet(() {
+                        loading = false;
+                        error = 'Could not load sources. Check your connection and try again.';
+                      });
+                    }
                   });
-                }
-              }).catchError((e) {
-                if (ctx.mounted) {
-                  setSheet(() {
-                    loading = false;
-                    error = 'Could not load sources.\n$e';
-                  });
-                }
-              });
             }
             return _sourcesSheet(ctx, sources, loading, error, startAt);
           },
@@ -150,14 +156,19 @@ class _DetailsScreenState extends State<DetailsScreen> {
     );
   }
 
-  Widget _sourcesSheet(BuildContext ctx, List<StreamSource> sources,
-      bool loading, String? error, Duration startAt) {
+  Widget _sourcesSheet(
+    BuildContext ctx,
+    List<StreamSource> sources,
+    bool loading,
+    String? error,
+    Duration startAt,
+  ) {
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
       minChildSize: 0.4,
       maxChildSize: 0.9,
       expand: false,
-      builder: (_, scroll) => GlassCard(
+      builder: (_, scroll) => AppCard(
         radius: 24,
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
         child: Column(
@@ -165,10 +176,12 @@ class _DetailsScreenState extends State<DetailsScreen> {
           children: [
             Center(
               child: Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2)),
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -182,13 +195,15 @@ class _DetailsScreenState extends State<DetailsScreen> {
             const Text(
               'Some links are resolver links and may not play in-app — '
               'use “Open externally” if playback fails.',
-              style: TextStyle(fontSize: 12, color: GlassTheme.muted),
+              style: TextStyle(fontSize: 12, color: AppTheme.muted),
             ),
             const SizedBox(height: 12),
             if (loading)
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else if (error != null)
-              Expanded(child: Center(child: Text(error, textAlign: TextAlign.center)))
+              Expanded(
+                child: Center(child: Text(error, textAlign: TextAlign.center)),
+              )
             else
               Expanded(
                 child: ListView.builder(
@@ -199,37 +214,49 @@ class _DetailsScreenState extends State<DetailsScreen> {
                     final s = sources[i];
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
-                      child: GlassCard(
+                      child: AppCard(
                         radius: 14,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                         child: Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
                               decoration: BoxDecoration(
-                                color: GlassTheme.accent.withValues(alpha: 0.2),
+                                color: AppTheme.accent.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Text(s.label,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w700)),
+                              child: Text(
+                                s.label,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(s.uploader ?? 'Direct',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 13)),
+                                  Text(
+                                    s.uploader ?? 'Direct',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
                                   if (s.sizeLabel.isNotEmpty)
-                                    Text(s.sizeLabel,
-                                        style: const TextStyle(
-                                            fontSize: 11,
-                                            color: GlassTheme.muted)),
+                                    Text(
+                                      s.sizeLabel,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.muted,
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -249,15 +276,20 @@ class _DetailsScreenState extends State<DetailsScreen> {
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                        content: Text('Download started — see Library → Downloads')),
+                                      content: Text(
+                                        'Download started — see Library → Downloads',
+                                      ),
+                                    ),
                                   );
                                 }
                               },
                             ),
                             IconButton(
                               tooltip: 'Play',
-                              icon: const Icon(Icons.play_arrow_rounded,
-                                  color: GlassTheme.accent2),
+                              icon: const Icon(
+                                Icons.play_arrow_rounded,
+                                color: AppTheme.accent2,
+                              ),
                               onPressed: () {
                                 Navigator.pop(ctx);
                                 _playSource(sources, s, startAt);
@@ -276,7 +308,11 @@ class _DetailsScreenState extends State<DetailsScreen> {
     );
   }
 
-  void _playSource(List<StreamSource> sources, StreamSource source, Duration startAt) {
+  void _playSource(
+    List<StreamSource> sources,
+    StreamSource source,
+    Duration startAt,
+  ) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PlayerScreen(
@@ -295,71 +331,88 @@ class _DetailsScreenState extends State<DetailsScreen> {
   Widget build(BuildContext context) {
     final s = _subject;
     return Scaffold(
-      body: GlassBackground(
-        child: CustomScrollView(
-          slivers: [
-            SliverAppBar(
-              expandedHeight: 320,
-              pinned: true,
-              flexibleSpace: FlexibleSpaceBar(
-                background: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Hero(
-                      tag: 'poster-${widget.subject.id}',
-                      child: s.posterUrl == null
-                          ? Container(color: GlassTheme.surface)
-                          : CachedNetworkImage(
-                              imageUrl: s.posterUrl!,
-                              fit: BoxFit.cover,
-                              alignment: Alignment.topCenter,
-                              placeholder: (_, _) =>
-                                  Container(color: GlassTheme.surface),
-                              errorWidget: (_, _, _) =>
-                                  Container(color: GlassTheme.surface),
-                            ),
-                    ),
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.3),
-                            GlassTheme.bg.withValues(alpha: 0.95),
-                          ],
-                        ),
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 320,
+            pinned: true,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Hero(
+                    tag: 'poster-${widget.subject.id}',
+                    child: s.posterUrl == null
+                        ? Container(color: AppTheme.surface)
+                        : CachedNetworkImage(
+                            imageUrl: s.posterUrl!,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.topCenter,
+                            placeholder: (_, _) =>
+                                Container(color: AppTheme.surface),
+                            errorWidget: (_, _, _) =>
+                                Container(color: AppTheme.surface),
+                          ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.3),
+                          AppTheme.bg.withValues(alpha: 0.95),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              actions: [
-                IconButton(
-                  icon: Icon(_isFav ? Icons.favorite : Icons.favorite_border,
-                      color: _isFav ? GlassTheme.accent3 : null),
-                  onPressed: _toggleFav,
-                ),
-              ],
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                child: _loading
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(32),
-                          child: CircularProgressIndicator(),
-                        ),
-                      )
-                    : _error != null
-                        ? Center(
-                            child: Text(_error!, textAlign: TextAlign.center))
-                        : _body(s),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+            actions: [
+              IconButton(
+                icon: Icon(
+                  _isFav ? Icons.favorite : Icons.favorite_border,
+                  color: _isFav ? AppTheme.accent3 : null,
+                ),
+                onPressed: _toggleFav,
+              ),
+            ],
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              child: _loading
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  : _error != null
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.cloud_off_outlined,
+                            size: 40,
+                            color: AppTheme.muted,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(_error!, textAlign: TextAlign.center),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: _load,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _body(s),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -369,8 +422,10 @@ class _DetailsScreenState extends State<DetailsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(s.title,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+        Text(
+          s.title,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -388,13 +443,13 @@ class _DetailsScreenState extends State<DetailsScreen> {
             spacing: 6,
             runSpacing: 6,
             children: s.genres
-                .map((g) => Chip(
-                      label: Text(g, style: const TextStyle(fontSize: 12)),
-                      backgroundColor: GlassTheme.glassFill,
-                      side: const BorderSide(color: GlassTheme.glassBorder),
-                      padding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ))
+                .map(
+                  (g) => Chip(
+                    label: Text(g, style: const TextStyle(fontSize: 12)),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                )
                 .toList(),
           ),
         ],
@@ -404,21 +459,26 @@ class _DetailsScreenState extends State<DetailsScreen> {
           child: FilledButton.icon(
             onPressed: _play,
             icon: const Icon(Icons.play_arrow_rounded),
-            label: Text(_savedPosition != null && _savedPosition!.inSeconds >= 10
-                ? 'Play · resume ${_fmt(_savedPosition!)}'
-                : 'Play'),
+            label: Text(
+              _savedPosition != null && _savedPosition!.inSeconds >= 10
+                  ? 'Play · resume ${_fmt(_savedPosition!)}'
+                  : 'Play',
+            ),
             style: FilledButton.styleFrom(
-              backgroundColor: GlassTheme.accent,
+              backgroundColor: AppTheme.accent,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
           ),
         ),
         if (d.dubs.length > 1) ...[
           const SizedBox(height: 16),
-          const Text('Language / Dub',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          const Text(
+            'Language / Dub',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -426,18 +486,14 @@ class _DetailsScreenState extends State<DetailsScreen> {
               ChoiceChip(
                 label: const Text('Original'),
                 selected: _dubSubjectId == null,
-                selectedColor: GlassTheme.accent,
-                backgroundColor: GlassTheme.glassFill,
-                side: const BorderSide(color: GlassTheme.glassBorder),
+                selectedColor: AppTheme.accent,
                 onSelected: (_) => setState(() => _dubSubjectId = null),
               ),
               for (final dub in d.dubs)
                 ChoiceChip(
                   label: Text(dub.language),
                   selected: _dubSubjectId == dub.subjectId,
-                  selectedColor: GlassTheme.accent,
-                  backgroundColor: GlassTheme.glassFill,
-                  side: const BorderSide(color: GlassTheme.glassBorder),
+                  selectedColor: AppTheme.accent,
                   onSelected: (_) =>
                       setState(() => _dubSubjectId = dub.subjectId),
                 ),
@@ -446,29 +502,31 @@ class _DetailsScreenState extends State<DetailsScreen> {
         ],
         if (d.isSeries && d.seasons.isNotEmpty) ...[
           const SizedBox(height: 20),
-          const Text('Episodes',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          const Text(
+            'Episodes',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: d.seasons
-                  .map((se) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text('Season ${se.season}'),
-                          selected: _season == se.season,
-                          selectedColor: GlassTheme.accent,
-                          backgroundColor: GlassTheme.glassFill,
-                          side: const BorderSide(color: GlassTheme.glassBorder),
-                          onSelected: (_) => setState(() {
-                            _season = se.season;
-                            _episode = se.episodes.isNotEmpty
-                                ? se.episodes.first
-                                : 1;
-                          }),
-                        ),
-                      ))
+                  .map(
+                    (se) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text('Season ${se.season}'),
+                        selected: _season == se.season,
+                        selectedColor: AppTheme.accent,
+                        onSelected: (_) => setState(() {
+                          _season = se.season;
+                          _episode = se.episodes.isNotEmpty
+                              ? se.episodes.first
+                              : 1;
+                        }),
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
           ),
@@ -477,24 +535,28 @@ class _DetailsScreenState extends State<DetailsScreen> {
             spacing: 8,
             runSpacing: 8,
             children: _currentEpisodes(d)
-                .map((ep) => ChoiceChip(
-                      label: Text('E$ep'),
-                      selected: _episode == ep,
-                      selectedColor: GlassTheme.accent,
-                      backgroundColor: GlassTheme.glassFill,
-                      side: const BorderSide(color: GlassTheme.glassBorder),
-                      onSelected: (_) => setState(() => _episode = ep),
-                    ))
+                .map(
+                  (ep) => ChoiceChip(
+                    label: Text('E$ep'),
+                    selected: _episode == ep,
+                    selectedColor: AppTheme.accent,
+                    onSelected: (_) => setState(() => _episode = ep),
+                  ),
+                )
                 .toList(),
           ),
         ],
         if ((s.description ?? '').isNotEmpty) ...[
           const SizedBox(height: 20),
-          const Text('About',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          const Text(
+            'About',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 6),
-          Text(s.description!,
-              style: const TextStyle(color: GlassTheme.muted, height: 1.5)),
+          Text(
+            s.description!,
+            style: const TextStyle(color: AppTheme.muted, height: 1.5),
+          ),
         ],
         if (s.director != null || s.stars != null) ...[
           const SizedBox(height: 16),
@@ -505,7 +567,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
         const Text(
           'Sources are resolved live from the MovieBox API. '
           'This app hosts no media.',
-          style: TextStyle(fontSize: 11, color: GlassTheme.muted),
+          style: TextStyle(fontSize: 11, color: AppTheme.muted),
         ),
       ],
     );
@@ -520,35 +582,40 @@ class _DetailsScreenState extends State<DetailsScreen> {
   }
 
   Widget _metaChip(String label) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: GlassTheme.glassFill,
-          borderRadius: BorderRadius.circular(9),
-          border: Border.all(color: GlassTheme.glassBorder),
-        ),
-        child: Text(label, style: const TextStyle(fontSize: 12)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: AppTheme.surface,
+      borderRadius: BorderRadius.circular(9),
+    ),
+    child: Text(label, style: const TextStyle(fontSize: 12)),
+  );
 
   Widget _fact(String k, String v) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: RichText(
-          text: TextSpan(
-            style: const TextStyle(fontSize: 13, color: GlassTheme.text),
-            children: [
-              TextSpan(
-                  text: '$k: ',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              TextSpan(text: v, style: const TextStyle(color: GlassTheme.muted)),
-            ],
+    padding: const EdgeInsets.only(bottom: 6),
+    child: RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 13, color: AppTheme.text),
+        children: [
+          TextSpan(
+            text: '$k: ',
+            style: const TextStyle(fontWeight: FontWeight.w700),
           ),
-        ),
-      );
+          TextSpan(
+            text: v,
+            style: const TextStyle(color: AppTheme.muted),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 String _fmt(Duration d) {
   final h = d.inHours;
   final m = d.inMinutes % 60;
   final s = d.inSeconds % 60;
-  if (h > 0) return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  if (h > 0) {
+    return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
   return '$m:${s.toString().padLeft(2, '0')}';
 }

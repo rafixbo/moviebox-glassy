@@ -36,8 +36,7 @@ void main() {
   test('GET canonical sorts query params and leaves body fields empty', () {
     final c = MovieBoxSigning.canonical(
       method: 'GET',
-      url:
-          'https://api4.aoneroom.com/wefeed-mobile-bff/subject-api/resource?subjectId=123&se=2&ep=1&page=1&perPage=20',
+      url: 'https://api4.aoneroom.com/wefeed-mobile-bff/subject-api/resource?subjectId=123&se=2&ep=1&page=1&perPage=20',
       body: null,
       timestampMs: ts,
     );
@@ -49,8 +48,7 @@ void main() {
     expect(
       MovieBoxSigning.trSignature(
         method: 'GET',
-        url:
-            'https://api4.aoneroom.com/wefeed-mobile-bff/subject-api/resource?subjectId=123&se=2&ep=1&page=1&perPage=20',
+        url: 'https://api4.aoneroom.com/wefeed-mobile-bff/subject-api/resource?subjectId=123&se=2&ep=1&page=1&perPage=20',
         body: null,
         timestampMs: ts,
       ),
@@ -73,12 +71,21 @@ void main() {
   });
 
   test('signing is deterministic for the same inputs', () {
-    const url = 'https://api5.aoneroom.com/wefeed-mobile-bff/subject-api/search/v2';
+    const url =
+        'https://api5.aoneroom.com/wefeed-mobile-bff/subject-api/search/v2';
     const body = '{"keyword":"Avengers","page":1,"perPage":15,"subjectType":0}';
     final a = MovieBoxSigning.trSignature(
-        method: 'POST', url: url, body: body, timestampMs: ts);
+      method: 'POST',
+      url: url,
+      body: body,
+      timestampMs: ts,
+    );
     final b = MovieBoxSigning.trSignature(
-        method: 'POST', url: url, body: body, timestampMs: ts);
+      method: 'POST',
+      url: url,
+      body: body,
+      timestampMs: ts,
+    );
     expect(a, b);
     expect(a, startsWith('$ts|2|'));
   });

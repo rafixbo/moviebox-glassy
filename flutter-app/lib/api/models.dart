@@ -4,7 +4,6 @@
 /// `cover.url`, `resourceLink`, `resourceDetectors`, etc.
 library;
 
-
 enum MediaType { movie, series }
 
 String _id(dynamic v) {
@@ -21,10 +20,17 @@ String? _yearOf(dynamic v) {
 
 List<String> _genres(dynamic v) {
   if (v is List) {
-    return v.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).toList();
+    return v
+        .map((e) => e.toString())
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
   }
   if (v is String) {
-    return v.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    return v
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
   }
   return const [];
 }
@@ -104,32 +110,33 @@ class Subject {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'type': type == MediaType.series ? 2 : 1,
-        'year': year,
-        'posterUrl': posterUrl,
-        'description': description,
-        'rating': rating,
-        'duration': duration,
-        'genres': genres,
-        'director': director,
-        'stars': stars,
-      };
+    'id': id,
+    'title': title,
+    'type': type == MediaType.series ? 2 : 1,
+    'year': year,
+    'posterUrl': posterUrl,
+    'description': description,
+    'rating': rating,
+    'duration': duration,
+    'genres': genres,
+    'director': director,
+    'stars': stars,
+  };
 
   factory Subject.fromStored(Map<String, dynamic> j) => Subject(
-        id: j['id'] as String? ?? '',
-        title: j['title'] as String? ?? 'Unknown',
-        type: (j['type'] ?? 1) == 2 ? MediaType.series : MediaType.movie,
-        year: j['year'] as String?,
-        posterUrl: j['posterUrl'] as String?,
-        description: j['description'] as String?,
-        rating: j['rating'] as String?,
-        duration: j['duration'] as String?,
-        genres: (j['genres'] as List?)?.map((e) => e.toString()).toList() ?? const [],
-        director: j['director'] as String?,
-        stars: j['stars'] as String?,
-      );
+    id: j['id'] as String? ?? '',
+    title: j['title'] as String? ?? 'Unknown',
+    type: (j['type'] ?? 1) == 2 ? MediaType.series : MediaType.movie,
+    year: j['year'] as String?,
+    posterUrl: j['posterUrl'] as String?,
+    description: j['description'] as String?,
+    rating: j['rating'] as String?,
+    duration: j['duration'] as String?,
+    genres:
+        (j['genres'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+    director: j['director'] as String?,
+    stars: j['stars'] as String?,
+  );
 }
 
 class SeasonInfo {
@@ -142,13 +149,20 @@ class Dub {
   final String subjectId;
   final String language;
   final String label;
-  const Dub({required this.subjectId, required this.language, required this.label});
+  const Dub({
+    required this.subjectId,
+    required this.language,
+    required this.label,
+  });
 
   factory Dub.fromJson(Map<String, dynamic> j) => Dub(
-        subjectId: _id(j['subjectId'] ?? j['id']),
-        language: (j['lanName'] ?? j['language'] ?? j['lang'] ?? 'Unknown').toString(),
-        label: (j['title'] ?? j['name'] ?? j['lanName'] ?? j['language'] ?? 'Unknown').toString(),
-      );
+    subjectId: _id(j['subjectId'] ?? j['id']),
+    language: (j['lanName'] ?? j['language'] ?? j['lang'] ?? 'Unknown')
+        .toString(),
+    label:
+        (j['title'] ?? j['name'] ?? j['lanName'] ?? j['language'] ?? 'Unknown')
+            .toString(),
+  );
 }
 
 class Details {
@@ -168,13 +182,16 @@ class Details {
 
   /// Parse the `/subject-api/get` payload. `seasonJson` is the optional
   /// `/subject-api/season-info` payload (series only).
-  factory Details.fromJson(Map<String, dynamic> root, [Map<String, dynamic>? seasonJson]) {
+  factory Details.fromJson(
+    Map<String, dynamic> root, [
+    Map<String, dynamic>? seasonJson,
+  ]) {
     final data = root['data'];
     final subjJson = (data is Map && data['subject'] is Map)
         ? Map<String, dynamic>.from(data['subject'] as Map)
         : (root['subject'] is Map
-            ? Map<String, dynamic>.from(root['subject'] as Map)
-            : Map<String, dynamic>.from(data is Map ? data : root));
+              ? Map<String, dynamic>.from(root['subject'] as Map)
+              : Map<String, dynamic>.from(data is Map ? data : root));
     // Merge seasons from the season-info call into the subject json.
     if (seasonJson != null) {
       final sd = seasonJson['data'] ?? seasonJson;
@@ -265,7 +282,8 @@ class CaptionTrack {
 /// Skips empty/tiny entries (mirrors the Rust filter).
 List<CaptionTrack> parseCaptions(Map<String, dynamic> root) {
   final data = root['data'];
-  final caps = (data is Map ? data['extCaptions'] : null) as List? ??
+  final caps =
+      (data is Map ? data['extCaptions'] : null) as List? ??
       (root['extCaptions'] as List?) ??
       const [];
   final seen = <String>{};
@@ -308,9 +326,14 @@ List<Subject> parseSearchResults(Map<String, dynamic> root) {
 
 /// Parse the homepage payload: data.items[] groups -> banner / customData /
 /// subjects. Returns (hero subjects, all unique subjects in order).
-({List<Subject> hero, List<Subject> all}) parseHomeFeed(Map<String, dynamic> root) {
+({List<Subject> hero, List<Subject> all}) parseHomeFeed(
+  Map<String, dynamic> root,
+) {
   final data = root['data'];
-  final items = (data is Map ? data['items'] : null) as List? ?? (root['items'] as List?) ?? const [];
+  final items =
+      (data is Map ? data['items'] : null) as List? ??
+      (root['items'] as List?) ??
+      const [];
   final hero = <Subject>[];
   final all = <Subject>[];
   final seen = <String>{};
@@ -339,12 +362,15 @@ List<Subject> parseSearchResults(Map<String, dynamic> root) {
         if (s is Map) groupSubjects.add(Map<String, dynamic>.from(s));
       }
     }
-    final isBannerGroup = (g['type']?.toString() == 'BANNER') ||
+    final isBannerGroup =
+        (g['type']?.toString() == 'BANNER') ||
         (banner is Map && banner['banners'] is List);
     for (final s in groupSubjects) {
       final sub = Subject.fromJson(s);
       if (sub.id.isEmpty) continue;
-      if (isBannerGroup && hero.length < 8 && !hero.any((h) => h.id == sub.id)) {
+      if (isBannerGroup &&
+          hero.length < 8 &&
+          !hero.any((h) => h.id == sub.id)) {
         hero.add(sub);
       }
       if (seen.add(sub.id)) all.add(sub);
@@ -371,14 +397,16 @@ List<StreamSource> parseStreamSources({
     if (url == null || url.isEmpty || url == placeholder) return;
     final base = url.split('?').first;
     if (!seen.add(base)) return;
-    out.add(StreamSource(
-      url: url,
-      label: res > 0 ? '${res}p' : 'Direct',
-      resolution: res,
-      sizeBytes: size,
-      uploader: up,
-      resourceId: rid,
-    ));
+    out.add(
+      StreamSource(
+        url: url,
+        label: res > 0 ? '${res}p' : 'Direct',
+        resolution: res,
+        sizeBytes: size,
+        uploader: up,
+        resourceId: rid,
+      ),
+    );
   }
 
   int resOf(dynamic v) {
@@ -396,7 +424,15 @@ List<StreamSource> parseStreamSources({
   final streams = (piData is Map ? piData['streams'] : null) as List?;
   if (streams != null) {
     for (final s in streams) {
-      if (s is Map) add(s['url']?.toString(), resOf(s['resolution']), sizeOf(s['size']), null, null);
+      if (s is Map) {
+        add(
+          s['url']?.toString(),
+          resOf(s['resolution']),
+          sizeOf(s['size']),
+          null,
+          null,
+        );
+      }
     }
   }
   // 2) resource list.
@@ -425,15 +461,24 @@ List<StreamSource> parseStreamSources({
     if (resList != null && resList.isNotEmpty) {
       for (final r in resList) {
         if (r is Map) {
-          add((r['resourceLink'] ?? r['downloadUrl'])?.toString(), resOf(r['resolution']),
-              sizeOf(r['firstSize'] ?? r['size']), d['uploadBy']?.toString(),
-              _id(d['resourceId']));
+          add(
+            (r['resourceLink'] ?? r['downloadUrl'])?.toString(),
+            resOf(r['resolution']),
+            sizeOf(r['firstSize'] ?? r['size']),
+            d['uploadBy']?.toString(),
+            _id(d['resourceId']),
+          );
         }
       }
       continue;
     }
-    add(d['downloadUrl']?.toString(), 0, sizeOf(d['firstSize']), d['uploadBy']?.toString(),
-        _id(d['resourceId']));
+    add(
+      d['downloadUrl']?.toString(),
+      0,
+      sizeOf(d['firstSize']),
+      d['uploadBy']?.toString(),
+      _id(d['resourceId']),
+    );
   }
 
   out.sort((a, b) {

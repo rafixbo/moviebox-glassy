@@ -45,7 +45,9 @@ void main() {
   });
 
   test('check() fails open on unreachable host', () async {
-    final client = MockClient((_) async => throw http.ClientException('offline'));
+    final client = MockClient(
+      (_) async => throw http.ClientException('offline'),
+    );
     final result = await AppUpdate.instance.check(client: client);
     expect(result, isNull);
   });
@@ -61,17 +63,19 @@ void main() {
   test('check() returns available when remote build is newer', () async {
     // Installed build injected (1) so the test does not need PackageInfo /
     // platform channels; remote latestBuild 9999 / minBuild 9998 -> forced.
-    final client = MockClient((_) async => http.Response(
-          jsonEncode({
-            'latestVersion': '9.9.9',
-            'latestBuild': 9999,
-            'minBuild': 9998,
-            'apkUrl': 'https://example.com/app.apk',
-            'windowsUrl': 'https://example.com/app.zip',
-            'notes': 'future',
-          }),
-          200,
-        ));
+    final client = MockClient(
+      (_) async => http.Response(
+        jsonEncode({
+          'latestVersion': '9.9.9',
+          'latestBuild': 9999,
+          'minBuild': 9998,
+          'apkUrl': 'https://example.com/app.apk',
+          'windowsUrl': 'https://example.com/app.zip',
+          'notes': 'future',
+        }),
+        200,
+      ),
+    );
     final result = await AppUpdate.instance.check(
       client: client,
       installedBuildOverride: 1,
@@ -82,17 +86,19 @@ void main() {
   });
 
   test('check() returns available (not forced) when above minBuild', () async {
-    final client = MockClient((_) async => http.Response(
-          jsonEncode({
-            'latestVersion': '9.9.9',
-            'latestBuild': 9999,
-            'minBuild': 1,
-            'apkUrl': 'https://example.com/app.apk',
-            'windowsUrl': 'https://example.com/app.zip',
-            'notes': 'future',
-          }),
-          200,
-        ));
+    final client = MockClient(
+      (_) async => http.Response(
+        jsonEncode({
+          'latestVersion': '9.9.9',
+          'latestBuild': 9999,
+          'minBuild': 1,
+          'apkUrl': 'https://example.com/app.apk',
+          'windowsUrl': 'https://example.com/app.zip',
+          'notes': 'future',
+        }),
+        200,
+      ),
+    );
     final result = await AppUpdate.instance.check(
       client: client,
       installedBuildOverride: 5,
@@ -102,17 +108,19 @@ void main() {
   });
 
   test('check() returns null when installed build is current', () async {
-    final client = MockClient((_) async => http.Response(
-          jsonEncode({
-            'latestVersion': '1.0.0',
-            'latestBuild': 1,
-            'minBuild': 1,
-            'apkUrl': 'https://example.com/app.apk',
-            'windowsUrl': 'https://example.com/app.zip',
-            'notes': 'First release',
-          }),
-          200,
-        ));
+    final client = MockClient(
+      (_) async => http.Response(
+        jsonEncode({
+          'latestVersion': '1.0.0',
+          'latestBuild': 1,
+          'minBuild': 1,
+          'apkUrl': 'https://example.com/app.apk',
+          'windowsUrl': 'https://example.com/app.zip',
+          'notes': 'First release',
+        }),
+        200,
+      ),
+    );
     final result = await AppUpdate.instance.check(
       client: client,
       installedBuildOverride: 1,

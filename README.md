@@ -1,6 +1,6 @@
 # MovieBox Glassy
 
-A smooth, glassy, compact movie & TV streaming app for **Android and Windows**,
+A smooth, compact movie & TV streaming app with a clean Material 3 UI for **Android and Windows**,
 built in pure Flutter.
 
 > **Note:** `apkUrl` / `windowsUrl` in `version.json` currently point at the
@@ -27,7 +27,7 @@ built in pure Flutter.
 - **In-app updates** — checks `version.json` on GitHub on startup and from
   About → Check for updates. Optional update dialog, or a forced full-screen
   update screen when below `minBuild`. Fails open offline.
-- **Glassy design** — dark glass theme, frosted cards, smooth transitions,
+- **Material 3 design** — clean dark Material theme, solid surfaces, smooth transitions,
   hero poster animations, skeleton loading, 60fps-feeling lists
 
 No login screen, no ads, no account.
