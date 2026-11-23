@@ -114,9 +114,25 @@ install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
 # without the Visual C++ Redistributable installed the app would fail
 # to start ("VCRUNTIME140.dll was not found"). This makes the zip
 # self-contained on any Windows 10/11 machine.
+#
+# Run #7 lesson: InstallRequiredSystemLibraries can list runtime paths
+# that do not exist on the build machine (newer Visual Studio layouts),
+# and install(FILES ...) then fails the whole Windows build at the
+# install step (MSB3073, cmake install exited 1, no CMake-level
+# diagnostic — the Flutter tool swallows the build output). So only
+# install DLLs verified to exist at configure time; a missing DLL is
+# skipped with a warning instead of breaking the build.
 include(InstallRequiredSystemLibraries)
-if(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
-  install(FILES ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+set(_vc_runtime_dlls "")
+foreach(_dll IN LISTS CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+  if(EXISTS "${_dll}")
+    list(APPEND _vc_runtime_dlls "${_dll}")
+  else()
+    message(STATUS "Skipping missing VC++ runtime file: ${_dll}")
+  endif()
+endforeach()
+if(_vc_runtime_dlls)
+  install(FILES ${_vc_runtime_dlls}
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
