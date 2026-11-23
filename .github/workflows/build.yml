@@ -78,7 +78,7 @@ jobs:
         run: flutter pub get
       - name: Build Windows
         working-directory: flutter-app
-        run: flutter build windows --release
+        run: flutter build windows --release -v
       - name: Zip Windows build
         run: Compress-Archive -Path flutter-app/build/windows/x64/runner/Release/* -DestinationPath moviebox-glassy-windows.zip
       - name: Upload Windows zip
