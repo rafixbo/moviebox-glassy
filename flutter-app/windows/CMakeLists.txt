@@ -115,24 +115,50 @@ install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
 # to start ("VCRUNTIME140.dll was not found"). This makes the zip
 # self-contained on any Windows 10/11 machine.
 #
-# Run #7 lesson: InstallRequiredSystemLibraries can list runtime paths
-# that do not exist on the build machine (newer Visual Studio layouts),
-# and install(FILES ...) then fails the whole Windows build at the
-# install step (MSB3073, cmake install exited 1, no CMake-level
-# diagnostic — the Flutter tool swallows the build output). So only
-# install DLLs verified to exist at configure time; a missing DLL is
-# skipped with a warning instead of breaking the build.
-include(InstallRequiredSystemLibraries)
+# Run #9 lesson (verbose CI log, run 45178757682): NEVER use
+# include(InstallRequiredSystemLibraries) here. That module adds its own
+# install(PROGRAMS ... DESTINATION bin) rule, and the relative "bin"
+# destination is resolved against CMAKE_INSTALL_PREFIX — which the
+# Flutter template sets to the generator expression
+# "$<TARGET_FILE_DIR:moviebox_glassy>". The install script runs in
+# script mode, where generator expressions are NOT evaluated, so CMake
+# tried to create a literal directory named
+# ".../x64/$<TARGET_FILE_DIR:moviebox_glassy>/bin" and failed
+# (cmake_install.cmake:362, MSB3073). The stock install() rules work
+# because their DESTINATIONs carry the generator expression directly
+# and the Visual Studio generator expands it at generation time.
+# So: locate the DLLs ourselves and install them with a plain
+# install(FILES ...) using the same DESTINATION form as the stock rules.
+# A missing DLL is skipped with a message instead of breaking the build.
 set(_vc_runtime_dlls "")
-foreach(_dll IN LISTS CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
-  if(EXISTS "${_dll}")
-    list(APPEND _vc_runtime_dlls "${_dll}")
-  else()
-    message(STATUS "Skipping missing VC++ runtime file: ${_dll}")
+set(_vc_compiler "${CMAKE_CXX_COMPILER}")
+if(NOT _vc_compiler)
+  set(_vc_compiler "${CMAKE_C_COMPILER}")
+endif()
+if(_vc_compiler)
+  # cl.exe lives at <VS>/VC/Tools/MSVC/<ver>/bin/HostX64/x64/cl.exe;
+  # the redist DLLs live at <VS>/VC/Redist/MSVC/<ver>/x64/Microsoft.VC*.CRT/.
+  get_filename_component(_vc_dir "${_vc_compiler}" DIRECTORY)
+  get_filename_component(_vc_dir "${_vc_dir}/../../../../../.." ABSOLUTE)
+  file(GLOB _vc_redist_crt_dirs
+    "${_vc_dir}/Redist/MSVC/*/x64/Microsoft.VC*.CRT")
+  if(_vc_redist_crt_dirs)
+    list(SORT _vc_redist_crt_dirs)
+    list(GET _vc_redist_crt_dirs -1 _vc_crt_dir)
+    foreach(_dll_name IN ITEMS msvcp140.dll vcruntime140.dll vcruntime140_1.dll)
+      set(_dll_path "${_vc_crt_dir}/${_dll_name}")
+      if(EXISTS "${_dll_path}")
+        list(APPEND _vc_runtime_dlls "${_dll_path}")
+      else()
+        message(STATUS "VC++ runtime DLL not found: ${_dll_path}")
+      endif()
+    endforeach()
   endif()
-endforeach()
+endif()
 if(_vc_runtime_dlls)
   install(FILES ${_vc_runtime_dlls}
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
+else()
+  message(STATUS "VC++ runtime DLLs not found under the MSVC redist dir; skipping (app still builds, target PC needs the VC++ Redistributable)")
 endif()
