@@ -1,0 +1,87 @@
+name: Build MovieBox Glassy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+      # Binary assets (gradle-wrapper.jar, launcher PNGs) are gitignored, so
+      # they are NOT in the repo. Restore them from a fresh flutter template,
+      # exactly as the proven HSC Revision Master workflow does.
+      - name: Restore binary assets from flutter template
+        working-directory: flutter-app
+        run: |
+          flutter create --org com.rafixb.moviebox --project-name moviebox_glassy --platforms=android "$RUNNER_TEMP/flutter-template"
+          cp -r "$RUNNER_TEMP/flutter-template/android/app/src/main/res/mipmap-"* android/app/src/main/res/
+          cp "$RUNNER_TEMP/flutter-template/android/gradle/wrapper/gradle-wrapper.jar" android/gradle/wrapper/
+      - name: Pub get
+        working-directory: flutter-app
+        run: flutter pub get
+      - name: Analyze
+        working-directory: flutter-app
+        run: flutter analyze
+      - name: Test
+        working-directory: flutter-app
+        run: flutter test
+      - name: Build APK
+        working-directory: flutter-app
+        run: flutter build apk --release
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: moviebox-glassy-android-apk
+          path: flutter-app/build/app/outputs/flutter-apk/app-release.apk
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+      # Analyze + test already run on the Android (ubuntu) job, and the
+      # HSC Revision Master Windows job — green twice on 2026-11-22,
+      # runs 45065199019 / 45070569380 — runs pub get + build only.
+      # Keeping this job to the same proven shape narrows any future
+      # failure to the Windows build itself.
+      # Binary assets (Windows .ico, launcher PNGs, gradle-wrapper.jar) are
+      # gitignored, so restore them from a fresh flutter template, as HSC does.
+      - name: Restore binary assets from flutter template
+        shell: bash
+        working-directory: flutter-app
+        run: |
+          flutter create --org com.rafixb.moviebox --project-name moviebox_glassy --platforms=android,windows "$RUNNER_TEMP/flutter-template"
+          cp "$RUNNER_TEMP/flutter-template/windows/runner/resources/app_icon.ico" windows/runner/resources/
+          cp "$RUNNER_TEMP/flutter-template/android/gradle/wrapper/gradle-wrapper.jar" android/gradle/wrapper/ || true
+          cp -r "$RUNNER_TEMP/flutter-template/android/app/src/main/res/mipmap-"* android/app/src/main/res/ || true
+      - name: Pub get
+        working-directory: flutter-app
+        run: flutter pub get
+      - name: Build Windows
+        working-directory: flutter-app
+        run: flutter build windows --release
+      - name: Zip Windows build
+        run: Compress-Archive -Path flutter-app/build/windows/x64/runner/Release/* -DestinationPath moviebox-glassy-windows.zip
+      - name: Upload Windows zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: moviebox-glassy-windows
+          path: moviebox-glassy-windows.zip
