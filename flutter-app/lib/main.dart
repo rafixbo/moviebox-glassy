@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
@@ -14,7 +15,26 @@ import 'widgets/app_widgets.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  MediaKit.ensureInitialized();
+  // Crash-hardening: a native player-init failure (e.g. libmpv failing
+  // to load) must not kill the app before first frame. If it fails,
+  // the app still opens (home/search work); playback will surface a
+  // catchable error instead of a hard crash.
+  try {
+    MediaKit.ensureInitialized();
+  } catch (e) {
+    debugPrint('[main] MediaKit.ensureInitialized failed: $e');
+  }
+  // Never let an uncaught async error kill the process: log it and
+  // keep the app alive. (Release builds previously died silently on
+  // setState-after-dispose and other async errors from the player.)
+  FlutterError.onError = (details) {
+    debugPrint('[FlutterError] ${details.exceptionAsString()}');
+    FlutterError.presentError(details);
+  };
+  ui.PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('[PlatformError] $error');
+    return true;
+  };
   runApp(const MovieBoxGlassyApp());
 }
 

@@ -8,10 +8,11 @@ import '../api/moviebox_api.dart';
 
 /// Offline downloads. Files land in the platform Downloads folder
 /// (Android: app documents / Downloads; Windows: user Downloads).
-/// Same UA + Referer headers as playback, plus the session Cookie
-/// when the source carries one (DASH downloads 403 without it).
-/// Pause/resume uses HTTP Range when the server supports it;
-/// otherwise the download restarts.
+/// Direct files download with UA only (the bcdn CDN 429s any mp4
+/// request carrying the sportslive.wine Referer); manifests keep
+/// Referer + Cookie (their hosts require the Cookie). Pause/resume
+/// uses HTTP Range when the server supports it; otherwise the
+/// download restarts.
 class DownloadItem {
   final String id; // subjectId|season|episode
   final String title;
@@ -124,10 +125,18 @@ class DownloadManager {
     try {
       final file = File(item.filePath);
       var downloaded = await file.exists() ? await file.length() : 0;
+      // Direct files (mp4): UA only — the bcdn CDN 429s any mp4
+      // request carrying the sportslive.wine Referer (verified live
+      // 2026-11-23), and the signed ?sign= URL is the auth, so no
+      // Cookie either. Manifests (.mpd/.m3u8) keep Referer + Cookie:
+      // their hosts accept the Referer and require the Cookie.
+      final isManifest =
+          url.split('?').first.toLowerCase().endsWith('.mpd') ||
+          url.split('?').first.toLowerCase().endsWith('.m3u8');
       final headers = <String, dynamic>{
         'User-Agent': kUserAgent,
-        'Referer': kPlayerReferer,
-        if (item.cookie != null && item.cookie!.isNotEmpty)
+        if (isManifest) 'Referer': kPlayerReferer,
+        if (isManifest && item.cookie != null && item.cookie!.isNotEmpty)
           'Cookie': item.cookie!,
         if (downloaded > 0) 'Range': 'bytes=$downloaded-',
       };

@@ -18,16 +18,16 @@ import 'models.dart';
 
 const String kPlayerReferer = 'https://sportslive.wine';
 
-/// HTTP headers the player must send for a stream, mirroring the
-/// upstream MovieBox-Tui adapter (`src/providers/moviebox/adapt.rs`):
+/// HTTP headers for DASH/HLS streams, mirroring the upstream
+/// MovieBox-Tui adapter (`src/providers/moviebox/adapt.rs`):
 /// `Referer` + `User-Agent`, PLUS the session `Cookie` when the source
 /// carries one. The cookie is the decisive header for DASH (.mpd)
 /// streams: the CDN returns 403 on the manifest and on every .m4s
-/// segment without it (verified live 2026-11-23). media_kit/mpv
-/// applies these headers to the manifest request and to all segment
-/// requests, which is exactly the upstream mpv `--http-header-fields`
-/// semantics. Direct mp4 resource links carry their own `?sign=`
-/// query and work with or without the cookie.
+/// segment without it (verified live 2026-11-23). These headers are
+/// attached by the [StreamRelay] to EVERY upstream request (manifest +
+/// every segment) — they are NOT passed to the player anymore, because
+/// media_kit's one-time `httpHeaders` do not reliably reach later
+/// DASH segment fetches.
 Map<String, String> streamHeaders(StreamSource source) {
   final headers = <String, String>{
     'User-Agent': kUserAgent,
@@ -39,6 +39,21 @@ Map<String, String> streamHeaders(StreamSource source) {
   }
   return headers;
 }
+
+/// Headers for a DIRECT media file (.mp4/.mkv, or any non-manifest
+/// source) opened by the player or the downloader: User-Agent only.
+///
+/// The bcdn CDN answers 429 ("Too Many Requests", plain nginx page)
+/// to ANY mp4 request carrying `Referer: https://sportslive.wine` —
+/// verified live 2026-11-23 (Interstellar 720p: UA + Range → 206,
+/// Referer + Range → 429, UA + Referer + Range → 429; ffmpeg with
+/// the app's old headers exits 8, UA-only exits 0). Since the mp4 is
+/// the FIRST source for ~67/68 titles, this Referer was the reason
+/// "many videos don't play". The signed `?sign=` URL is the auth for
+/// these files, so no Cookie is needed either. Matches upstream
+/// MovieBox-Tui (which strips Referer on direct MP4) and the official
+/// app (which sends no Referer at all on its ExoPlayer path).
+Map<String, String> directFileHeaders() => {'User-Agent': kUserAgent};
 const String kUserAgent =
     'com.community.oneroom/50020120 (Linux; U; Android 13; en_US; 23078RKD5C; Build/TQ2A.230405.003; Cronet/135.0.7012.3)';
 

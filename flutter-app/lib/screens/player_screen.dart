@@ -9,14 +9,20 @@ import 'package:url_launcher/url_launcher.dart';
 import '../api/models.dart';
 import '../api/moviebox_api.dart';
 import '../services/storage.dart';
+import '../services/stream_relay.dart';
 import '../theme.dart';
 
 /// Material in-app player (media_kit — Android + Windows).
 ///
 /// Streams carry the CDN session cookie from the API (`signCookie`):
-/// without it the DASH manifest and segments return 403. The player
-/// sends it via media_kit `httpHeaders` (mirroring upstream
-/// MovieBox-Tui's mpv `--http-header-fields`), and on failure it
+/// without it the DASH manifest and segments return 403. DASH/HLS
+/// sources play through a local loopback relay ([StreamRelay]): the
+/// player opens `http://127.0.0.1:<port>/manifest.mpd` and the relay
+/// attaches UA + Referer + Cookie to every upstream request, so the
+/// cookie reaches every segment (media_kit only sets `httpHeaders`
+/// once at load time, and playback stalled after exactly one 5 s
+/// segment — the classic later-segments-without-cookie failure).
+/// Direct files keep the header-on-URL path. On failure the player
 /// auto-recovers — one fresh source refresh, then the next source —
 /// before ever showing the error card. Some resource links are still
 /// *resolver* links (e.g. ugc-video.com) rather than direct media
@@ -92,6 +98,42 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _refreshed = false;
   int _autoTries = 0;
 
+  /// Local loopback relay for DASH/HLS sources. The player opens the
+  /// relay's loopback manifest instead of the raw CDN URL, so the
+  /// session cookie reaches every segment (see stream_relay.dart).
+  /// Null for direct files and offline playback.
+  StreamRelay? _relay;
+
+  bool _isRelaySource(StreamSource s) {
+    if (_isOffline) return false;
+    final base = s.url.split('?').first.toLowerCase();
+    return base.endsWith('.mpd') || base.endsWith('.m3u8');
+  }
+
+  /// Fresh source for the relay when a segment 403s mid-playback:
+  /// same manifest when possible (segment URLs are stable across
+  /// mints — only the cookie changes), else any DASH/HLS source.
+  Future<StreamSource?> _refreshRelaySource() async {
+    try {
+      final fresh = await MovieBoxApi.instance.streams(
+        widget.subject.id,
+        season: widget.season,
+        episode: widget.episode,
+        detectors: widget.detectors,
+      );
+      final base = _urlKey(_current);
+      for (final s in fresh) {
+        if (_urlKey(s) == base) return s;
+      }
+      for (final s in fresh) {
+        if (_isRelaySource(s)) return s;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   String _urlKey(StreamSource s) => s.url.split('?').first;
 
   @override
@@ -147,21 +189,44 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _open(StreamSource source, {required Duration startAt}) async {
+    // Guard: recovery can outlive the screen (user pressed Back while
+    // the player was opening). setState/seek after dispose used to
+    // throw uncaught async errors — one of the Windows crash paths.
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _hasError = false;
       _current = source;
     });
     _tried.add(_urlKey(source));
+    // DASH/HLS go through the local relay: the player opens the
+    // loopback manifest and the relay attaches UA + Referer + Cookie
+    // to every upstream request (manifest + every segment). Direct
+    // files open with UA only — the bcdn CDN 429s any mp4 request
+    // carrying the sportslive.wine Referer, so it must never be sent
+    // on a direct file (verified live 2026-11-23).
+    var mediaUrl = source.url;
+    Map<String, String>? headers = directFileHeaders();
+    if (_isRelaySource(source)) {
+      try {
+        _relay ??= StreamRelay(refreshSource: _refreshRelaySource);
+        await _relay!.start(source);
+        mediaUrl = _relay!.manifestUrl;
+        headers = null; // loopback needs no auth headers
+      } catch (e) {
+        // Relay unavailable (bind failure etc.) — fall back to the
+        // direct path with headers rather than failing playback.
+        debugPrint('[Player] relay start failed, direct open: $e');
+        await _relay?.stop();
+        _relay = null;
+      }
+    } else {
+      await _relay?.stop();
+      _relay = null;
+    }
     final media = _isOffline
         ? Media(widget.offlineFilePath!)
-        // Headers mirror the upstream MovieBox-Tui adapter: Referer +
-        // User-Agent, PLUS the session Cookie when the source carries
-        // one. Without the cookie the CDN answers 403 on the DASH
-        // manifest and on every segment — that was the playback failure.
-        // mpv applies these headers to the manifest AND segment
-        // requests, so one Media carries the whole fix.
-        : Media(source.url, httpHeaders: streamHeaders(source));
+        : Media(mediaUrl, httpHeaders: headers);
     try {
       await _player.open(media, play: true);
     } catch (e) {
@@ -169,10 +234,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _tryRecover();
       return;
     }
-    if (startAt > Duration.zero) {
-      // Give the player a moment to buffer before seeking.
+    if (startAt > Duration.zero && mounted) {
+      // Give the player a moment to buffer before seeking. The seek
+      // sits outside the open try/catch on purpose — a disposed player
+      // or a failed seek must not throw an uncaught async error.
       await Future.delayed(const Duration(milliseconds: 600));
-      await _player.seek(startAt);
+      if (!mounted) return;
+      try {
+        await _player.seek(startAt);
+      } catch (e) {
+        debugPrint('[Player] resume seek failed: $e');
+      }
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -181,7 +253,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   /// [_maxAutoTries] automatic attempts, then the error card appears.
   /// First attempt is a fresh source refresh (new session cookie —
   /// cookies are time-limited, so a stale one is the most common
-  /// failure); after that, the next untried source in the list.
+  /// failure), then the next untried source in the list — never the
+  /// URL that just failed, so the budget always reaches new sources.
   Future<void> _tryRecover() async {
     if (_recovering || _hasError || !mounted) return;
     if (_autoTries >= _maxAutoTries) {
@@ -206,8 +279,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
         );
         if (fresh.isNotEmpty && mounted) {
           _sources = fresh;
-          // New cookies: the same URLs are worth retrying.
+          // Fresh cookies for the remaining sources — but do NOT
+          // retry the URL that just failed: it already failed with
+          // this player, and re-opening it wastes one of the three
+          // attempts (a 4-mp4 + DASH title would then never reach
+          // the playable DASH source). The relay already refreshes
+          // the DASH cookie itself on 403, and direct mp4s carry no
+          // cookie, so a same-URL retry buys nothing anymore.
+          final failed = _urlKey(_current);
           _tried.clear();
+          _tried.add(failed);
           final next = _nextUntried();
           if (next != null) {
             _recovering = false;
@@ -281,6 +362,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _playingSub?.cancel();
     _completedSub?.cancel();
     _errorSub?.cancel();
+    unawaited(_relay?.stop());
     _savePosition();
     _player.dispose();
     super.dispose();

@@ -106,3 +106,17 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# Bundle the Visual C++ runtime DLLs (MSVCP140.dll, VCRUNTIME140.dll,
+# VCRUNTIME140_1.dll) next to the executable. The exe and the video
+# plugin link against them (verified with objdump on the shipped zip),
+# but the CI zip previously did not contain them — on a Windows PC
+# without the Visual C++ Redistributable installed the app would fail
+# to start ("VCRUNTIME140.dll was not found"). This makes the zip
+# self-contained on any Windows 10/11 machine.
+include(InstallRequiredSystemLibraries)
+if(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+  install(FILES ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+endif()
