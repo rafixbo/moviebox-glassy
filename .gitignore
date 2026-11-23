@@ -1,0 +1,6 @@
+.DS_Store
+flutter-app/build/
+flutter-app/.dart_tool/
+flutter-app/.flutter-plugins-dependencies
+flutter-app/android/local.properties
+flutter-app/.idea/
