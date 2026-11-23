@@ -69,6 +69,7 @@ jobs:
         working-directory: flutter-app
         run: |
           flutter create --org com.rafixb.moviebox --project-name moviebox_glassy --platforms=android,windows "$RUNNER_TEMP/flutter-template"
+          mkdir -p windows/runner/resources
           cp "$RUNNER_TEMP/flutter-template/windows/runner/resources/app_icon.ico" windows/runner/resources/
           cp "$RUNNER_TEMP/flutter-template/android/gradle/wrapper/gradle-wrapper.jar" android/gradle/wrapper/ || true
           cp -r "$RUNNER_TEMP/flutter-template/android/app/src/main/res/mipmap-"* android/app/src/main/res/ || true
