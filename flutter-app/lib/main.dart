@@ -134,24 +134,19 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   int _index = 0;
 
-  static const _pages = [HomeScreen(), SearchScreen(), LibraryScreen()];
+  static const _pages = [
+    HomeScreen(),
+    SearchScreen(),
+    LibraryScreen(),
+    AboutScreen(),
+  ];
 
-  static const _titles = ['MovieBox Glassy', 'Search', 'Library'];
+  static const _titles = ['MovieBox Glassy', 'Search', 'Library', 'Settings'];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_titles[_index]),
-        actions: [
-          IconButton(
-            tooltip: 'About & updates',
-            icon: const Icon(Icons.info_outline),
-            onPressed: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => const AboutScreen())),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: Text(_titles[_index])),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
         child: KeyedSubtree(key: ValueKey(_index), child: _pages[_index]),
@@ -168,6 +163,10 @@ class _ShellState extends State<Shell> {
           NavigationDestination(
             icon: Icon(Icons.video_library_rounded),
             label: 'Library',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            label: 'Settings',
           ),
         ],
       ),

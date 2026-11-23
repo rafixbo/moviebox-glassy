@@ -53,87 +53,78 @@ class _AboutScreenState extends State<AboutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('About')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'MovieBox Glassy',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Version $_version',
-                  style: const TextStyle(color: AppTheme.muted),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'A smooth, compact movie & TV streaming client '
-                  'for Android and Windows. No account, no ads.',
-                  style: TextStyle(height: 1.5),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          AppCard(
-            onTap: _checking ? null : () => _check(),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.system_update_rounded,
-                  color: AppTheme.accent2,
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Check for updates',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                if (_checking)
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  const Icon(Icons.chevron_right, color: AppTheme.muted),
-              ],
-            ),
-          ),
-          if (_status.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 10, left: 4),
-              child: Text(
-                _status,
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'MovieBox Glassy',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Version $_version',
                 style: const TextStyle(color: AppTheme.muted),
               ),
-            ),
-          const SizedBox(height: 12),
-          const AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Credits', style: TextStyle(fontWeight: FontWeight.w700)),
-                SizedBox(height: 6),
-                Text(
-                  'Streaming data comes from the MovieBox API, as used by '
-                  'mesamirh/MovieBox-Tui (github.com/mesamirh/MovieBox-Tui). '
-                  'This app hosts no media and is a third-party client '
-                  'for personal use only.',
-                  style: TextStyle(color: AppTheme.muted, height: 1.5),
-                ),
-              ],
-            ),
+              const SizedBox(height: 12),
+              const Text(
+                'A smooth, compact movie & TV streaming client '
+                'for Android and Windows. No account, no ads.',
+                style: TextStyle(height: 1.5),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 12),
+        AppCard(
+          onTap: _checking ? null : () => _check(),
+          child: Row(
+            children: [
+              const Icon(Icons.system_update_rounded, color: AppTheme.accent2),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Check for updates',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (_checking)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                const Icon(Icons.chevron_right, color: AppTheme.muted),
+            ],
+          ),
+        ),
+        if (_status.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 10, left: 4),
+            child: Text(_status, style: const TextStyle(color: AppTheme.muted)),
+          ),
+        const SizedBox(height: 12),
+        const AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Credits', style: TextStyle(fontWeight: FontWeight.w700)),
+              SizedBox(height: 6),
+              Text(
+                'Streaming data comes from the MovieBox API, as used by '
+                'mesamirh/MovieBox-Tui (github.com/mesamirh/MovieBox-Tui). '
+                'This app hosts no media and is a third-party client '
+                'for personal use only.',
+                style: TextStyle(color: AppTheme.muted, height: 1.5),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

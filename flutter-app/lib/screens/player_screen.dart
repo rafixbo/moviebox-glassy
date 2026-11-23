@@ -48,7 +48,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? _subLabel;
   bool _controlsVisible = true;
   bool _hasError = false;
-  String _errorText = '';
   bool _loading = true;
   Timer? _hideTimer;
   Timer? _sleepTimer;
@@ -93,9 +92,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
     _errorSub = _player.stream.error.listen((e) {
       if (e.isNotEmpty && mounted) {
+        // The raw player error often contains the direct stream URL.
+        // It goes to the log only — the UI never shows URLs, anywhere.
+        debugPrint('[Player] playback error: $e');
         setState(() {
           _hasError = true;
-          _errorText = e;
           _loading = false;
         });
       }
@@ -326,22 +327,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
-            Text(
+            const Text(
               'This source could not be played in-app. '
-              'It may be a resolver link — try another quality or an external player.',
+              'Try another quality or an external player.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppTheme.muted),
+              style: TextStyle(color: AppTheme.muted),
             ),
-            if (_errorText.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                _errorText,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11, color: Colors.white38),
-              ),
-            ],
             const SizedBox(height: 14),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
