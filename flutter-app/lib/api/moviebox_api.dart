@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'h5_api.dart';
 import 'models.dart';
 
 /// MovieBox API client — Dart port of mesamirh/MovieBox-Tui
@@ -453,8 +454,19 @@ class MovieBoxApi {
   }
 
   // ---- Public API ----
+  //
+  // Home, search and details try the H5 (web) API first: it answers
+  // through themoviebox.xyz, which loads on networks where the mobile
+  // hosts (api*.aoneroom.com) fail DNS entirely. When H5 fails, the
+  // mobile API is the fallback. Playback (streams/captions) stays on
+  // the mobile API — H5 play returns no streams to guests.
 
   Future<List<Subject>> search(String query, {int page = 1}) async {
+    try {
+      return await H5Api.instance.search(query, page: page);
+    } on H5Exception catch (e) {
+      debugPrint('[MovieBoxApi] H5 search failed, trying mobile: $e');
+    }
     final body = jsonEncode({
       'keyword': query,
       'page': page,
@@ -472,6 +484,11 @@ class MovieBoxApi {
   Future<({List<Subject> hero, List<Subject> all})> homeFeed({
     int page = 1,
   }) async {
+    try {
+      return await H5Api.instance.homeFeed();
+    } on H5Exception catch (e) {
+      debugPrint('[MovieBoxApi] H5 home failed, trying mobile: $e');
+    }
     final json = await _request(
       'GET',
       '/wefeed-mobile-bff/tab-operating?page=$page&tabId=2&version=',
@@ -479,7 +496,14 @@ class MovieBoxApi {
     return parseHomeFeed(json);
   }
 
-  Future<Details> details(String subjectId) async {
+  Future<Details> details(String subjectId, {String? detailPath}) async {
+    if (detailPath != null && detailPath.isNotEmpty) {
+      try {
+        return await H5Api.instance.detailsByPath(detailPath);
+      } on H5Exception catch (e) {
+        debugPrint('[MovieBoxApi] H5 details failed, trying mobile: $e');
+      }
+    }
     final json = await _request(
       'GET',
       '/wefeed-mobile-bff/subject-api/get?subjectId=$subjectId',

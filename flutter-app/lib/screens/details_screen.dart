@@ -53,7 +53,10 @@ class _DetailsScreenState extends State<DetailsScreen> {
 
   Future<void> _load() async {
     try {
-      final d = await MovieBoxApi.instance.details(widget.subject.id);
+      final d = await MovieBoxApi.instance.details(
+        widget.subject.id,
+        detailPath: widget.subject.detailPath,
+      );
       final fav = await LocalStore.instance.isFavorite(widget.subject.id);
       final pos = await LocalStore.instance.positionFor(
         widget.subject.id,

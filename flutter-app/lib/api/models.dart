@@ -68,6 +68,13 @@ class Subject {
   final String? stars;
   final int seasonCount;
 
+  /// Web (H5) detail slug, e.g. `steps-qJ0VewZNhVa`. Present on
+  /// subjects coming from the H5 API (home/search); null for subjects
+  /// from the mobile API or from local storage written before v1.0.4.
+  /// The details screen uses it to load details via the H5 API, which
+  /// is the path that works when the mobile hosts are unreachable.
+  final String? detailPath;
+
   const Subject({
     required this.id,
     required this.title,
@@ -81,6 +88,7 @@ class Subject {
     this.director,
     this.stars,
     this.seasonCount = 0,
+    this.detailPath,
   });
 
   bool get isSeries => type == MediaType.series;
@@ -106,6 +114,9 @@ class Subject {
       director: j['director']?.toString(),
       stars: j['stars']?.toString(),
       seasonCount: (j['season'] is num) ? (j['season'] as num).toInt() : 0,
+      detailPath: (j['detailPath'] as String?)?.isEmpty == true
+          ? null
+          : j['detailPath']?.toString(),
     );
   }
 
@@ -121,6 +132,7 @@ class Subject {
     'genres': genres,
     'director': director,
     'stars': stars,
+    'detailPath': detailPath,
   };
 
   factory Subject.fromStored(Map<String, dynamic> j) => Subject(
@@ -136,6 +148,7 @@ class Subject {
         (j['genres'] as List?)?.map((e) => e.toString()).toList() ?? const [],
     director: j['director'] as String?,
     stars: j['stars'] as String?,
+    detailPath: j['detailPath'] as String?,
   );
 }
 
@@ -179,6 +192,39 @@ class Details {
   });
 
   bool get isSeries => subject.isSeries || seasons.isNotEmpty;
+
+  /// Parse the H5 (web) `/wefeed-h5api-bff/detail` payload. Its shape
+  /// differs from the mobile one: `data.subject` is the subject map and
+  /// seasons live in `data.resource.seasons` ([{se, maxEp,
+  /// resolutions[]}]); dubs live in `data.subject.dubs`. The merged
+  /// subject map is fed to [Details.fromJson], which already knows how
+  /// to build seasons from `maxEp` and dubs from `dubs`.
+  factory Details.fromH5Json(Map<String, dynamic> root) {
+    final data = root['data'];
+    final subj = (data is Map && data['subject'] is Map)
+        ? Map<String, dynamic>.from(data['subject'] as Map)
+        : <String, dynamic>{};
+    final resource = (data is Map && data['resource'] is Map)
+        ? data['resource'] as Map
+        : null;
+    final seasons = resource?['seasons'];
+    if (seasons is List) {
+      // Movies come back with a single [{se: 0, maxEp: 0}] entry; drop
+      // it (and any season with no episodes) so a movie is not
+      // mistaken for a series (Details.isSeries checks seasons).
+      subj['seasons'] = seasons
+          .where(
+            (s) =>
+                s is Map &&
+                (s['maxEp'] is num) &&
+                (s['maxEp'] as num).toInt() > 0,
+          )
+          .toList();
+    }
+    return Details.fromJson({
+      'data': {'subject': subj},
+    });
+  }
 
   /// Parse the `/subject-api/get` payload. `seasonJson` is the optional
   /// `/subject-api/season-info` payload (series only).
@@ -312,7 +358,8 @@ List<CaptionTrack> parseCaptions(Map<String, dynamic> root) {
   return out;
 }
 
-/// Parse the search payload: data.results[0].subjects[], fallback data.list[].
+/// Parse the search payload: data.results[0].subjects[], fallback data.list[],
+/// fallback data.items[] (H5 web search returns `data.items`).
 List<Subject> parseSearchResults(Map<String, dynamic> root) {
   final data = root['data'];
   List? subjects;
@@ -322,14 +369,72 @@ List<Subject> parseSearchResults(Map<String, dynamic> root) {
       subjects = (results.first as Map)['subjects'] as List?;
     }
     subjects ??= data['list'] as List?;
+    subjects ??= data['items'] as List?;
   }
   subjects ??= root['list'] as List?;
+  subjects ??= root['items'] as List?;
   if (subjects == null) return const [];
   return subjects
       .whereType<Map>()
       .map((m) => Subject.fromJson(Map<String, dynamic>.from(m)))
       .where((s) => s.id.isNotEmpty)
       .toList();
+}
+
+/// Parse the H5 (web) homepage payload: `data.operatingList[]` sections.
+/// BANNER sections carry `banner.items[].subject`; content sections carry
+/// `subjects[]` directly. Returns the same (hero, all) shape as
+/// [parseHomeFeed] so the home screen needs no changes. Non-content
+/// sections (e.g. SPORT_LIVE with no subjects) are skipped.
+({List<Subject> hero, List<Subject> all}) parseH5HomeFeed(
+  Map<String, dynamic> root,
+) {
+  final data = root['data'];
+  final sections =
+      (data is Map ? data['operatingList'] : null) as List? ??
+      (root['operatingList'] as List?) ??
+      const [];
+  final hero = <Subject>[];
+  final all = <Subject>[];
+  final seen = <String>{};
+  for (final g in sections) {
+    if (g is! Map) continue;
+    final isBanner = g['type']?.toString() == 'BANNER';
+    final groupSubjects = <Map<String, dynamic>>[];
+    final banner = g['banner'];
+    if (banner is Map && banner['items'] is List) {
+      for (final b in banner['items'] as List) {
+        if (b is Map && b['subject'] is Map) {
+          groupSubjects.add(Map<String, dynamic>.from(b['subject'] as Map));
+        }
+      }
+    }
+    final custom = g['customData'];
+    if (custom is Map && custom['items'] is List) {
+      for (final c in custom['items'] as List) {
+        if (c is Map && c['subject'] is Map) {
+          groupSubjects.add(Map<String, dynamic>.from(c['subject'] as Map));
+        }
+      }
+    }
+    final subs = g['subjects'];
+    if (subs is List) {
+      for (final s in subs) {
+        if (s is Map) groupSubjects.add(Map<String, dynamic>.from(s));
+      }
+    }
+    for (final s in groupSubjects) {
+      final sub = Subject.fromJson(s);
+      if (sub.id.isEmpty) continue;
+      if (isBanner &&
+          hero.length < 8 &&
+          !hero.any((h) => h.id == sub.id)) {
+        hero.add(sub);
+      }
+      if (seen.add(sub.id)) all.add(sub);
+    }
+  }
+  return (hero: hero, all: all);
 }
 
 /// Parse the homepage payload: data.items[] groups -> banner / customData /
