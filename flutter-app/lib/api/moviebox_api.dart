@@ -25,10 +25,11 @@ const String kPlayerReferer = 'https://sportslive.wine';
 /// carries one. The cookie is the decisive header for DASH (.mpd)
 /// streams: the CDN returns 403 on the manifest and on every .m4s
 /// segment without it (verified live 2026-11-23). These headers are
-/// attached by the [StreamRelay] to EVERY upstream request (manifest +
-/// every segment) — they are NOT passed to the player anymore, because
-/// media_kit's one-time `httpHeaders` do not reliably reach later
-/// DASH segment fetches.
+/// passed to the player as media_kit's `httpHeaders` — mpv applies
+/// `http-header-fields` to EVERY request for that media (manifest +
+/// every segment), proven live 2026-11-25 with a local cookie-gated
+/// DASH server (20 s clip, all 17 requests carried the cookie) and
+/// by SparkBox, which ships the same direct-headers design.
 Map<String, String> streamHeaders(StreamSource source) {
   final headers = <String, String>{
     'User-Agent': kUserAgent,

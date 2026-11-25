@@ -9,19 +9,22 @@ import 'package:url_launcher/url_launcher.dart';
 import '../api/models.dart';
 import '../api/moviebox_api.dart';
 import '../services/storage.dart';
-import '../services/stream_relay.dart';
 import '../theme.dart';
 
 /// Material in-app player (media_kit — Android + Windows).
 ///
 /// Streams carry the CDN session cookie from the API (`signCookie`):
 /// without it the DASH manifest and segments return 403. DASH/HLS
-/// sources play through a local loopback relay ([StreamRelay]): the
-/// player opens `http://127.0.0.1:<port>/manifest.mpd` and the relay
-/// attaches UA + Referer + Cookie to every upstream request, so the
-/// cookie reaches every segment (media_kit only sets `httpHeaders`
-/// once at load time, and playback stalled after exactly one 5 s
-/// segment — the classic later-segments-without-cookie failure).
+/// sources open DIRECTLY with `httpHeaders` (UA + Referer + Cookie),
+/// exactly like SparkBox does — mpv applies `http-header-fields` to
+/// every HTTP request for that media (manifest + every segment), which
+/// was proven live 2026-11-25 with a local cookie-gated DASH server:
+/// mpv played a full 20 s clip and all 17 requests (manifest, init,
+/// segments) carried the cookie; without headers it 403'd at the
+/// manifest. The old local loopback relay did the same job through a
+/// Dart HttpServer and is gone — it was the prime suspect for the
+/// 5 s stall, since playback stalled after exactly one 5 s segment
+/// while the CDN itself serves every segment fine with the cookie.
 /// Direct files keep the header-on-URL path. On failure the player
 /// auto-recovers — one fresh source refresh, then the next source —
 /// before ever showing the error card. Some resource links are still
@@ -98,40 +101,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _refreshed = false;
   int _autoTries = 0;
 
-  /// Local loopback relay for DASH/HLS sources. The player opens the
-  /// relay's loopback manifest instead of the raw CDN URL, so the
-  /// session cookie reaches every segment (see stream_relay.dart).
-  /// Null for direct files and offline playback.
-  StreamRelay? _relay;
-
-  bool _isRelaySource(StreamSource s) {
+  /// Manifest sources (DASH/HLS) open directly with the stream
+  /// headers (UA + Referer + Cookie) — mpv sends them on every
+  /// segment request (see the class doc). Direct files use UA only.
+  bool _isManifestSource(StreamSource s) {
     if (_isOffline) return false;
     final base = s.url.split('?').first.toLowerCase();
     return base.endsWith('.mpd') || base.endsWith('.m3u8');
-  }
-
-  /// Fresh source for the relay when a segment 403s mid-playback:
-  /// same manifest when possible (segment URLs are stable across
-  /// mints — only the cookie changes), else any DASH/HLS source.
-  Future<StreamSource?> _refreshRelaySource() async {
-    try {
-      final fresh = await MovieBoxApi.instance.streams(
-        widget.subject.id,
-        season: widget.season,
-        episode: widget.episode,
-        detectors: widget.detectors,
-      );
-      final base = _urlKey(_current);
-      for (final s in fresh) {
-        if (_urlKey(s) == base) return s;
-      }
-      for (final s in fresh) {
-        if (_isRelaySource(s)) return s;
-      }
-      return null;
-    } catch (_) {
-      return null;
-    }
   }
 
   String _urlKey(StreamSource s) => s.url.split('?').first;
@@ -199,31 +175,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _current = source;
     });
     _tried.add(_urlKey(source));
-    // DASH/HLS go through the local relay: the player opens the
-    // loopback manifest and the relay attaches UA + Referer + Cookie
-    // to every upstream request (manifest + every segment). Direct
+    // DASH/HLS open directly with the stream headers (UA + Referer +
+    // Cookie) — mpv sends them on every manifest/segment request, so
+    // no loopback relay is needed (SparkBox does exactly this). Direct
     // files open with UA only — the bcdn CDN 429s any mp4 request
     // carrying the sportslive.wine Referer, so it must never be sent
     // on a direct file (verified live 2026-11-23).
-    var mediaUrl = source.url;
-    Map<String, String>? headers = directFileHeaders();
-    if (_isRelaySource(source)) {
-      try {
-        _relay ??= StreamRelay(refreshSource: _refreshRelaySource);
-        await _relay!.start(source);
-        mediaUrl = _relay!.manifestUrl;
-        headers = null; // loopback needs no auth headers
-      } catch (e) {
-        // Relay unavailable (bind failure etc.) — fall back to the
-        // direct path with headers rather than failing playback.
-        debugPrint('[Player] relay start failed, direct open: $e');
-        await _relay?.stop();
-        _relay = null;
-      }
-    } else {
-      await _relay?.stop();
-      _relay = null;
-    }
+    final mediaUrl = source.url;
+    final Map<String, String> headers = _isManifestSource(source)
+        ? streamHeaders(source)
+        : directFileHeaders();
     final media = _isOffline
         ? Media(widget.offlineFilePath!)
         : Media(mediaUrl, httpHeaders: headers);
@@ -283,9 +244,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
           // retry the URL that just failed: it already failed with
           // this player, and re-opening it wastes one of the three
           // attempts (a 4-mp4 + DASH title would then never reach
-          // the playable DASH source). The relay already refreshes
-          // the DASH cookie itself on 403, and direct mp4s carry no
-          // cookie, so a same-URL retry buys nothing anymore.
+          // the playable DASH source). Direct mp4s carry no cookie,
+          // so a same-URL retry buys nothing anymore.
           final failed = _urlKey(_current);
           _tried.clear();
           _tried.add(failed);
@@ -362,7 +322,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _playingSub?.cancel();
     _completedSub?.cancel();
     _errorSub?.cancel();
-    unawaited(_relay?.stop());
     _savePosition();
     _player.dispose();
     super.dispose();

@@ -14,11 +14,15 @@ import 'models.dart';
 /// Why this exists: the mobile hosts (`api*.aoneroom.com`) are
 /// unreachable from some networks (DNS fails on Rafi's phone for all 7),
 /// which left the app showing "Couldn't reach the server" on home.
-/// The H5 API answers on TWO hosts:
+/// The H5 API answers on THREE hosts:
 ///   1. `https://themoviebox.xyz` — the site itself proxies the BFF
 ///      (`/wefeed-h5api-bff/...`), so it works wherever the website
 ///      loads. Tried FIRST.
-///   2. `https://h5-api.aoneroom.com` — the direct BFF host (the web
+///   2. `https://movie-box.co` — SparkBox's H5 base (found in its
+///      decompiled Rust core, 2026-11-25) and reachable from Rafi's
+///      phone (6 CONNECTs in his HAR); country-code + play both
+///      answer code 0 there, verified live 2026-11-25.
+///   3. `https://h5-api.aoneroom.com` — the direct BFF host (the web
 ///      client's own `clientFetch.baseUrl`). Fallback.
 ///
 /// Auth is a guest JWT, NOT the mobile visitor-login and NOT the
@@ -52,6 +56,7 @@ class H5Api {
 
   static const List<String> _hosts = [
     'https://themoviebox.xyz',
+    'https://movie-box.co',
     'https://h5-api.aoneroom.com',
   ];
 
